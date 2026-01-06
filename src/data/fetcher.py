@@ -61,10 +61,16 @@ class StockDataFetcher:
         try:
             ticker = yf.Ticker(symbol)
             info = ticker.info
+            
+            # Handle None or invalid info
+            if info is None or not isinstance(info, dict):
+                logger.warning(f"No valid info found for {symbol}")
+                return {}
+            
             return info
         except Exception as e:
             logger.error(f"Error fetching info for {symbol}: {str(e)}")
-            return None
+            return {}
     
     def fetch_multiple_stocks(self, symbols, period='1y'):
         """
@@ -114,6 +120,21 @@ class FundamentalAnalyzer:
             ticker = yf.Ticker(symbol)
             info = ticker.info
             
+            # Handle None or invalid info
+            if info is None or not isinstance(info, dict):
+                logger.warning(f"No valid info for {symbol}, returning default")
+                return {
+                    'symbol': symbol,
+                    'pe_ratio': 'N/A',
+                    'forward_pe': 'N/A',
+                    'peg_ratio': 'N/A',
+                    'price_to_book': 'N/A',
+                    'pb_ratio': 'N/A',
+                    'dividend_yield': 'N/A',
+                    'market_cap': 'N/A',
+                    'enterprise_value': 'N/A',
+                }
+            
             valuation = {
                 'symbol': symbol,
                 'pe_ratio': info.get('trailingPE', 'N/A'),
@@ -136,6 +157,20 @@ class FundamentalAnalyzer:
         try:
             ticker = yf.Ticker(symbol)
             info = ticker.info
+            
+            # Handle None or invalid info
+            if info is None or not isinstance(info, dict):
+                logger.warning(f"No valid info for {symbol}, returning default")
+                return {
+                    'symbol': symbol,
+                    'debt_to_equity': 'N/A',
+                    'current_ratio': 'N/A',
+                    'quick_ratio': 'N/A',
+                    'profit_margin': 'N/A',
+                    'return_on_equity': 'N/A',
+                    'return_on_assets': 'N/A',
+                    'revenue_growth': 'N/A',
+                }
             
             health = {
                 'symbol': symbol,
