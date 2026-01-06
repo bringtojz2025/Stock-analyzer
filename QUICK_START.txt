@@ -1,0 +1,273 @@
+================================================================================
+                    QUICK START GUIDE
+          Stock Analyzer - USA Stock Analysis Tool
+================================================================================
+
+1. INSTALLATION
+================================================================================
+
+Option 1: Windows (using setup.bat)
+  > setup.bat
+
+Option 2: Linux/Mac (using setup.sh)
+  $ bash setup.sh
+
+Option 3: Manual Installation
+  $ python -m venv venv
+  
+  # Linux/Mac:
+  $ source venv/bin/activate
+  
+  # Windows:
+  > venv\Scripts\activate
+  
+  $ pip install -r requirements.txt
+
+
+2. CONFIGURATION
+================================================================================
+
+Copy configuration template:
+  $ cp .env.example .env        # Linux/Mac
+  > copy .env.example .env      # Windows
+
+Edit .env file with your settings:
+  - Email notifications (optional)
+  - Telegram Bot Token & Chat ID (optional)
+  - Webhook URL (optional)
+
+
+3. QUICK COMMANDS
+================================================================================
+
+Analyze single stock:
+  $ python cli.py analyze AAPL
+
+Analyze multiple stocks:
+  $ python cli.py analyze AAPL MSFT GOOGL TSLA AMZN
+
+Specify time period:
+  $ python cli.py analyze AAPL -p 1y      # 1 year
+  $ python cli.py analyze AAPL -p 6mo     # 6 months
+  $ python cli.py analyze AAPL -p 3mo     # 3 months
+
+Find buy opportunities (confidence >= 60%):
+  $ python cli.py buy AAPL MSFT GOOGL
+
+Find buy opportunities (confidence >= 70%):
+  $ python cli.py buy AAPL MSFT GOOGL -c 0.7
+
+Find sell opportunities:
+  $ python cli.py sell AAPL MSFT GOOGL
+
+Find hot stocks:
+  $ python cli.py hot AAPL MSFT GOOGL TSLA AMZN NFLX
+
+
+4. WEB DASHBOARD
+================================================================================
+
+Install Streamlit:
+  $ pip install streamlit
+
+Run Dashboard:
+  $ streamlit run dashboard.py
+
+Access at: http://localhost:8501
+
+Features:
+  ✓ Real-time stock analysis
+  ✓ Buy/Sell signal detection
+  ✓ Hot stocks overview
+  ✓ Technical indicators
+
+
+5. PYTHON USAGE
+================================================================================
+
+from main import StockAnalyzerApp
+
+app = StockAnalyzerApp()
+
+# Analyze single stock
+result = app.analyze_single_stock('AAPL', period='1y')
+app.print_analysis_summary('AAPL')
+
+# Find buy opportunities
+buy_opps = app.find_buy_opportunities(['AAPL', 'MSFT'], min_confidence=0.6)
+
+# Find sell opportunities
+sell_opps = app.find_sell_opportunities(['AAPL', 'MSFT'])
+
+# Get hot stocks
+hot = app.get_hot_stocks(['AAPL', 'MSFT', 'GOOGL'])
+print(f"Strong Buys: {len(hot['strong_buys'])}")
+
+
+6. OUTPUT INTERPRETATION
+================================================================================
+
+Buy Signal Example:
+  Symbol: AAPL
+  Confidence: 75%
+  Entry Price: $189.50
+  Target Price: $198.98
+  Stop Loss: $183.82
+  
+  Reasons:
+    • Golden Cross (SMA 20 > 50 > 200)
+    • RSI Oversold
+    • MACD Bullish
+
+Signal Levels:
+  🟢  Green (60-80%) = BUY
+  🟢🟢 Strong (>80%)  = STRONG BUY
+  🔴  Red (60-80%)    = SELL
+  🔴🔴 Strong (>80%)  = STRONG SELL
+  🟡  Yellow          = HOLD
+
+
+7. PRE-CONFIGURED STOCKS
+================================================================================
+
+Tech Stocks:
+  AAPL, MSFT, GOOGL, AMZN, TSLA, META, NFLX, NVDA, AMD, INTC
+
+Banks:
+  JPM, BAC, WFC, GS, MS
+
+Healthcare:
+  JNJ, PFE, UNH, ABBV, MRK
+
+You can add any US stock symbol!
+  $ python cli.py analyze TICKER_SYMBOL
+
+
+8. TIPS & BEST PRACTICES
+================================================================================
+
+✓ Use multiple timeframes for confirmation
+  $ python cli.py analyze AAPL -p 1mo
+  $ python cli.py analyze AAPL -p 3mo
+  $ python cli.py analyze AAPL -p 1y
+
+✓ Check fundamentals before investing
+  - Look at P/E Ratio
+  - Check Dividend Yield
+  - Review Debt/Equity ratio
+
+✓ Use appropriate confidence thresholds:
+  - 0.5 = Moderate (50%)
+  - 0.6 = Fair (60%)
+  - 0.7 = Strong (70%)
+  - 0.8 = Very Strong (80%)
+
+✓ Combine multiple indicators
+  - Never trade single signal alone
+  - Look for confirmation
+
+✓ Always use stop loss (default 3%)
+✓ Always set profit target (default 5%)
+✓ Diversify your portfolio
+✓ Remember: Past performance ≠ Future results
+
+
+9. COMMON ISSUES
+================================================================================
+
+"yfinance not installed"
+  Solution: pip install yfinance
+
+"No data found for symbol"
+  Solution: Check symbol validity (AAPL not AA)
+
+"Connection timeout"
+  Solution: Yahoo Finance may be down, try later
+
+"Module not found"
+  Solution: pip install -r requirements.txt
+
+Dashboard won't load
+  Solution: pip install streamlit
+
+
+10. NEXT STEPS
+================================================================================
+
+1. Read README.md for detailed documentation
+2. Check ARCHITECTURE.md for system design
+3. Review USAGE.md for advanced features
+4. Customize config/settings.py
+5. Set up notifications in .env
+6. Start monitoring your favorite stocks
+7. Set alerts for specific signals
+
+
+11. FILE STRUCTURE
+================================================================================
+
+stock_analyzer/
+├── main.py                 # Main application
+├── cli.py                  # Command-line interface
+├── dashboard.py            # Web dashboard
+├── requirements.txt        # Dependencies
+├── config/
+│   └── settings.py        # Configuration
+├── src/
+│   ├── data/              # Data fetching
+│   ├── analysis/          # Technical analysis
+│   ├── signals/           # Signal generation
+│   ├── notifications/     # Notifications
+│   └── ai/                # AI models
+└── tests/
+    └── test_analyzer.py   # Unit tests
+
+
+12. IMPORTANT DISCLAIMER
+================================================================================
+
+⚠️  This tool is for EDUCATIONAL purposes only
+⚠️  NOT financial advice or recommendation
+⚠️  Past performance ≠ Future results
+⚠️  Always do your own research before investing
+⚠️  Trading carries risk of financial loss
+⚠️  Consult a financial advisor if needed
+⚠️  Use at your own risk!
+
+
+13. GETTING HELP
+================================================================================
+
+Check documentation:
+  - README.md: Full documentation
+  - ARCHITECTURE.md: System design
+  - USAGE.md: Advanced features
+  - QUICK_START.txt: This file
+
+View logs:
+  $ tail -f logs/stock_analyzer.log    # Linux/Mac
+  > type logs\stock_analyzer.log       # Windows
+
+Run tests:
+  $ python -m pytest tests/
+
+Join community:
+  - Report issues
+  - Share improvements
+  - Suggest features
+
+
+================================================================================
+                         HAPPY TRADING! 📈
+         Stock Analyzer v1.0 - AI-Powered USA Stock Analysis
+================================================================================
+
+Start now:
+  $ python cli.py analyze AAPL MSFT GOOGL -p 6mo
+
+Or launch dashboard:
+  $ streamlit run dashboard.py
+
+Remember: The more you learn, the better your decisions will be! 🚀
+
+================================================================================
