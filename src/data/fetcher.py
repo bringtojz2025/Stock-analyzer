@@ -149,7 +149,17 @@ class FundamentalAnalyzer:
             return valuation
         except Exception as e:
             logger.error(f"Error analyzing valuation for {symbol}: {str(e)}")
-            return None
+            return {
+                'symbol': symbol,
+                'pe_ratio': 'N/A',
+                'forward_pe': 'N/A',
+                'peg_ratio': 'N/A',
+                'price_to_book': 'N/A',
+                'pb_ratio': 'N/A',
+                'dividend_yield': 'N/A',
+                'market_cap': 'N/A',
+                'enterprise_value': 'N/A',
+            }
     
     @staticmethod
     def analyze_financial_health(symbol):
@@ -185,4 +195,13 @@ class FundamentalAnalyzer:
             return health
         except Exception as e:
             logger.error(f"Error analyzing financial health for {symbol}: {str(e)}")
-            return None
+            return {
+                'symbol': symbol,
+                'debt_to_equity': 'N/A',
+                'current_ratio': 'N/A',
+                'quick_ratio': 'N/A',
+                'profit_margin': 'N/A',
+                'return_on_equity': 'N/A',
+                'return_on_assets': 'N/A',
+                'revenue_growth': 'N/A',
+            }

@@ -113,29 +113,52 @@ class SignalGenerator:
         Returns:
             dict: entry price, exit price, stop loss
         """
+        # Handle None or empty data
+        if data is None or (hasattr(data, 'empty') and data.empty):
+            logger.warning("Data is None or empty in generate_entry_exit_points, returning defaults")
+            return {
+                'entry_price': 0,
+                'target_price': 0,
+                'stop_loss': 0,
+                'bb_upper': 0,
+                'bb_lower': 0,
+                'atr': 0
+            }
+        
         from src.analysis.technical import TechnicalAnalyzer
         
         analyzer = TechnicalAnalyzer()
         
-        # Calculate indicators
-        atr = analyzer.calculate_atr(data)
-        bb = analyzer.calculate_bollinger_bands(data)
-        sma_20 = analyzer.calculate_sma(data, 20)
-        sma_50 = analyzer.calculate_sma(data, 50)
-        
-        latest_price = data['Close'].iloc[-1]
-        latest_atr = atr.iloc[-1]
-        bb_lower = bb['lower'].iloc[-1]
-        bb_upper = bb['upper'].iloc[-1]
-        
-        return {
-            'entry_price': latest_price,
-            'target_price': latest_price * 1.05,  # 5% profit target
-            'stop_loss': latest_price * 0.97,     # 3% stop loss
-            'bb_upper': bb_upper,
-            'bb_lower': bb_lower,
-            'atr': latest_atr
-        }
+        try:
+            # Calculate indicators
+            atr = analyzer.calculate_atr(data)
+            bb = analyzer.calculate_bollinger_bands(data)
+            sma_20 = analyzer.calculate_sma(data, 20)
+            sma_50 = analyzer.calculate_sma(data, 50)
+            
+            latest_price = data['Close'].iloc[-1]
+            latest_atr = atr.iloc[-1] if atr is not None and not atr.empty else 0
+            bb_lower = bb['lower'].iloc[-1] if bb is not None and not bb.empty else 0
+            bb_upper = bb['upper'].iloc[-1] if bb is not None and not bb.empty else 0
+            
+            return {
+                'entry_price': latest_price,
+                'target_price': latest_price * 1.05,  # 5% profit target
+                'stop_loss': latest_price * 0.97,     # 3% stop loss
+                'bb_upper': bb_upper,
+                'bb_lower': bb_lower,
+                'atr': latest_atr
+            }
+        except Exception as e:
+            logger.error(f"Error in generate_entry_exit_points: {str(e)}")
+            return {
+                'entry_price': 0,
+                'target_price': 0,
+                'stop_loss': 0,
+                'bb_upper': 0,
+                'bb_lower': 0,
+                'atr': 0
+            }
 
 
 class AISignalGenerator:
