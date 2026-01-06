@@ -191,6 +191,26 @@ class TechnicalAnalyzer:
         Returns:
             dict: สรุปผล
         """
+        # Handle None or empty data
+        if data is None or data.empty:
+            logger.warning("Data is None or empty, returning default summary")
+            return {
+                'latest_price': 0,
+                'sma_20': 0,
+                'sma_50': 0,
+                'sma_200': 0,
+                'rsi': 50,
+                'macd': 0,
+                'macd_signal': 0,
+                'macd_histogram': 0,
+                'bb_upper': 0,
+                'bb_middle': 0,
+                'bb_lower': 0,
+                'atr': 0,
+                'stoch_k': 50,
+                'stoch_d': 50,
+            }
+        
         analyzer = TechnicalAnalyzer()
         
         sma_20 = analyzer.calculate_sma(data, 20)
