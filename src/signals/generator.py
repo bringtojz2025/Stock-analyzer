@@ -114,8 +114,32 @@ class SignalGenerator:
             dict: entry price, exit price, stop loss
         """
         # Handle None or empty data
-        if data is None or (hasattr(data, 'empty') and data.empty):
-            logger.warning("Data is None or empty in generate_entry_exit_points, returning defaults")
+        if data is None:
+            logger.warning("Data is None in generate_entry_exit_points, returning defaults")
+            return {
+                'entry_price': 0,
+                'target_price': 0,
+                'stop_loss': 0,
+                'bb_upper': 0,
+                'bb_lower': 0,
+                'atr': 0
+            }
+        
+        # Check if data is DataFrame and not empty
+        if hasattr(data, 'empty'):
+            if data.empty:
+                logger.warning("Data is empty in generate_entry_exit_points, returning defaults")
+                return {
+                    'entry_price': 0,
+                    'target_price': 0,
+                    'stop_loss': 0,
+                    'bb_upper': 0,
+                    'bb_lower': 0,
+                    'atr': 0
+                }
+        elif isinstance(data, dict):
+            # If it's a dict (shouldn't happen but safety check)
+            logger.warning("Data is dict instead of DataFrame in generate_entry_exit_points, returning defaults")
             return {
                 'entry_price': 0,
                 'target_price': 0,
@@ -137,9 +161,16 @@ class SignalGenerator:
             sma_50 = analyzer.calculate_sma(data, 50)
             
             latest_price = data['Close'].iloc[-1]
-            latest_atr = atr.iloc[-1] if atr is not None and not atr.empty else 0
-            bb_lower = bb['lower'].iloc[-1] if bb is not None and not bb.empty else 0
-            bb_upper = bb['upper'].iloc[-1] if bb is not None and not bb.empty else 0
+            latest_atr = atr.iloc[-1] if atr is not None and len(atr) > 0 else 0
+            
+            # Check bb is dict with required keys
+            bb_lower = 0
+            bb_upper = 0
+            if bb is not None and isinstance(bb, dict):
+                if 'lower' in bb and bb['lower'] is not None and len(bb['lower']) > 0:
+                    bb_lower = bb['lower'].iloc[-1]
+                if 'upper' in bb and bb['upper'] is not None and len(bb['upper']) > 0:
+                    bb_upper = bb['upper'].iloc[-1]
             
             return {
                 'entry_price': latest_price,

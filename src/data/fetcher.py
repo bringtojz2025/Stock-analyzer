@@ -36,8 +36,15 @@ class StockDataFetcher:
             ticker = yf.Ticker(symbol)
             data = ticker.history(period=period, interval=interval)
             
-            if data.empty:
+            if data is None or data.empty:
                 logger.warning(f"No data found for {symbol}")
+                return None
+            
+            # Validate required columns
+            required_columns = ['Close', 'High', 'Low', 'Open', 'Volume']
+            missing_columns = [col for col in required_columns if col not in data.columns]
+            if missing_columns:
+                logger.warning(f"Missing columns {missing_columns} for {symbol}")
                 return None
             
             self.data_cache[symbol] = data

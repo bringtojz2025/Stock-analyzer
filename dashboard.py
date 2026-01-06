@@ -508,8 +508,11 @@ if selected_stocks:
                     
                     with col3:
                         st.metric("ตัดขาดทุน", f"${opp['stop_loss']:.2f}")
-                        profit_potential = ((opp['target_price'] - opp['entry_price']) / 
-                                          opp['entry_price'] * 100)
+                        if opp['entry_price'] != 0:
+                            profit_potential = ((opp['target_price'] - opp['entry_price']) / 
+                                              opp['entry_price'] * 100)
+                        else:
+                            profit_potential = 0
                         st.metric("ศักยภาพกำไร", f"{profit_potential:.1f}%")
                     
                     # Reasons
