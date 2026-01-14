@@ -35,17 +35,79 @@ st.markdown("วิเคราะห์แบบเรียลไทม์ด�
 
 # Sidebar
 with st.sidebar:
-    st.header("⚙️ การตั้งค่า")
+    # Create tabs in sidebar for better organization
+    sidebar_tab1, sidebar_tab2, sidebar_tab3 = st.tabs(["🏠 เลือกหุ้น", "⚙️ ตั้งค่า", "ℹ️ ช่วยเหลือ"])
     
-    # Initialize selected_stocks
-    selected_stocks = []
+    with sidebar_tab1:
+        st.header("เลือกหุ้นที่วิเคราะห์")
+        
+        # Initialize selected_stocks
+        selected_stocks = []
+        
+        # Mode selection with better styling
+        mode = st.radio(
+            "เลือกโหมดการใช้งาน",
+            ["📝 ป้อนชื่อหุ้น", "🔍 ค้นหาจากตลาด", "💎 หุ้นจิ๋วที่น่าสนใจ", "💰 หุ้นปันผล"],
+            index=0,
+            help="เลือกวิธีการค้นหาหุ้นที่ต้องการวิเคราะห์"
+        )
     
-    # Mode selection
-    mode = st.radio(
-        "เลือกโหมดการใช้งาน",
-        ["📝 ป้อนชื่อหุ้น", "🔍 ค้นหาจากตลาด", "💎 หุ้นจิ๋วที่น่าสนใจ", "💰 หุ้นปันผล"],
-        index=0
-    )
+    with sidebar_tab2:
+        st.header("⚙️ การตั้งค่า")
+        
+        # Settings section
+        st.subheader("🔍 วิธีการแสดงผล")
+        show_detailed_charts = st.checkbox("📊 แสดงกราฟรายละเอียด", value=True)
+        show_technical_indicators = st.checkbox("📈 แสดง Technical Indicators", value=True)
+        
+        st.divider()
+        st.subheader("🎯 ตั้งค่าสัญญาณ")
+        min_confidence = st.slider(
+            "ความมั่นใจขั้นต่ำของสัญญาณ (%)",
+            min_value=30,
+            max_value=100,
+            value=60,
+            step=5,
+            help="สัญญาณจะแสดงเฉพาะที่มีความมั่นใจตั้งแต่ระดับนี้ขึ้นไป"
+        )
+        
+        st.divider()
+        st.subheader("📅 ช่วงเวลา")
+        period = st.selectbox(
+            "เลือกช่วงเวลาการวิเคราะห์",
+            ["1mo", "3mo", "6mo", "1y", "2y", "5y"],
+            index=3,
+            help="ระยะเวลาของข้อมูลที่ใช้ในการวิเคราะห์"
+        )
+        
+        st.divider()
+        st.subheader("💾 การบันทึก")
+        if st.button("💾 ดาวน์โหลดผลการวิเคราะห์", use_container_width=True):
+            st.info("✅ ฟีเจอร์นี้จะอัปเดตในเร็ว ๆ นี้")
+    
+    with sidebar_tab3:
+        st.header("ℹ️ ข้อมูลและช่วยเหลือ")
+        st.markdown("""
+        ### วิธีการใช้งาน
+        1. **เลือกหุ้น**: ไปที่แท็บ "เลือกหุ้น" เพื่อเลือกหุ้นที่ต้องการวิเคราะห์
+        2. **ตั้งค่า**: ปรับการตั้งค่าในแท็บ "ตั้งค่า"
+        3. **ดูผลลัพธ์**: เลือกแท็บต่าง ๆ เพื่อดูผลการวิเคราะห์
+        
+        ### ความหมายของสิ่งต่อไปนี้
+        - **RSI**: Relative Strength Index (แรงผลักดันของราคา)
+        - **MACD**: Moving Average Convergence Divergence (แนวโน้ม)
+        - **SMA**: Simple Moving Average (ค่าเฉลี่ยเคลื่อนที่)
+        - **Buy Signal**: สัญญาณซื้อ (โอกาสที่ราคาจะขึ้น)
+        - **Sell Signal**: สัญญาณขาย (โอกาสที่ราคาจะลง)
+        
+        ### ข้อจำกัด
+        ⚠️ นี่คือเครื่องมือวิเคราะห์เท่านั้น ไม่ใช่คำแนะนำการลงทุน
+        """)
+    
+    # Mode selection logic (moved outside tabs for functionality)
+    if mode != "📝 ป้อนชื่อหุ้น":
+        # Switch back to sidebar_tab1 for mode selection
+        pass
     
     # Stock selection based on mode
     if mode == "📝 ป้อนชื่อหุ้น":
@@ -422,8 +484,8 @@ with st.sidebar:
         ['1mo', '3mo', '6mo', '1y', '2y']
     )
     
-    # Confidence threshold
-    min_confidence = st.slider(
+    # Confidence threshold (keep this as backup, main is in sidebar)
+    min_confidence_threshold = st.slider(
         "ระดับความเชื่อมั่นสัญญาณต่ำสุด",
         min_value=0.0,
         max_value=1.0,
@@ -440,170 +502,277 @@ app = StockAnalyzerApp()
 
 # Main content
 if selected_stocks:
-    # Tabs
+    # Display summary info
+    col_summary1, col_summary2, col_summary3 = st.columns(3)
+    with col_summary1:
+        st.metric("📊 จำนวนหุ้นที่วิเคราะห์", len(selected_stocks))
+    with col_summary2:
+        st.metric("📅 ช่วงเวลา", period)
+    with col_summary3:
+        st.metric("🎯 ความมั่นใจขั้นต่ำ", f"{min_confidence}%")
+    
+    st.divider()
+    
+    # Tabs with better styling
     tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs(
-        ["📈 การวิเคราะห์", "💚 สัญญาณซื้อ", "📉 สัญญาณขาย", "🔥 หุ้นฮอต", "💎 หุ้นจิ๋ว", "📊 รายละเอียดหุ้น"]
+        ["📈 การวิเคราะห์ทั้งหมด", "💚 สัญญาณซื้อ", "📉 สัญญาณขาย", "🔥 หุ้นฮอต", "💎 หุ้นจิ๋ว", "📊 รายละเอียดหุ้น"]
     )
     
     # Tab 1: Analysis
     with tab1:
-        st.header("วิเคราะห์เทคนิค")
+        st.header("📈 วิเคราะห์เทคนิค")
+        
+        # Quick filters
+        col_filter1, col_filter2 = st.columns(2)
+        with col_filter1:
+            show_chart = st.checkbox("📊 แสดงกราฟ", value=True)
+        with col_filter2:
+            sort_by = st.selectbox(
+                "เรียงลำดับ",
+                ["ตามลำดับที่เลือก", "ตามราคา (สูง→ต่ำ)", "ตามราคา (ต่ำ→สูง)", "ตาม RSI (สูง→ต่ำ)"],
+                key="sort_analysis"
+            )
+        
+        st.divider()
         
         cols = st.columns(len(selected_stocks) if len(selected_stocks) <= 3 else 3)
         
         for idx, symbol in enumerate(selected_stocks):
             with cols[idx % len(cols)]:
-                with st.spinner(f"กำลังวิเคราะห์ {symbol}..."):
+                with st.spinner(f"🔄 กำลังวิเคราะห์ {symbol}..."):
                     result = app.analyze_single_stock(symbol, period=period)
                     
+
                     if result:
                         technical = result['technical']
                         signals = result['signals']
                         
-                        # Create metric cards
-                        st.metric(
-                            f"{symbol}",
-                            f"${technical['latest_price']:.2f}",
-                            f"RSI: {technical['rsi']:.1f}"
-                        )
+                        # Create metric cards with better styling and visual indicators
+                        st.markdown(f"### {symbol}")
                         
-                        # Signal badge
-                        signal_type = 'ซื้อ' if signals['buy'] else \
-                                     'ขาย' if signals['sell'] else 'คงตำแหน่ง'
-                        signal_color = 'green' if signals['buy'] else \
-                                      'red' if signals['sell'] else 'orange'
+                        col_price, col_rsi, col_signal = st.columns(3)
                         
-                        st.markdown(f"**สัญญาณ**: :{signal_color}[{signal_type}] "
-                                  f"({signals['confidence']:.1%})")
+                        with col_price:
+                            st.metric(
+                                "💰 ราคา",
+                                f"${technical['latest_price']:.2f}",
+                                delta=None
+                            )
                         
-                        # Price levels
-                        col1, col2 = st.columns(2)
-                        with col1:
-                            st.write(f"**SMA20**: ${technical['sma_20']:.2f}")
-                            st.write(f"**SMA50**: ${technical['sma_50']:.2f}")
-                        with col2:
-                            st.write(f"**SMA200**: ${technical['sma_200']:.2f}")
-                            st.write(f"**ATR**: {technical['atr']:.4f}")
+                        with col_rsi:
+                            rsi_value = technical['rsi']
+                            rsi_status = "🔴 ขายมาก" if rsi_value > 70 else \
+                                        "✅ ซื้อมาก" if rsi_value < 30 else \
+                                        "🆗 ปกติ"
+                            st.metric("📊 RSI", f"{rsi_value:.1f}", delta=rsi_status)
+                        
+                        with col_signal:
+                            if signals['buy']:
+                                signal_display = '✅ ซื้อ'
+                            elif signals['sell']:
+                                signal_display = '⛔ ขาย'
+                            else:
+                                signal_display = '⏸️ คงตำแหน่ง'
+                            st.metric("📈 สัญญาณ", signal_display, delta=f"{signals['confidence']:.1%}")
                         
                         st.divider()
+                        
+                        # Price levels in expandable section
+                        with st.expander("📊 ตัวชี้วัดเพิ่มเติม"):
+                            col_left, col_right = st.columns(2)
+                            with col_left:
+                                st.write("**📉 Moving Averages:**")
+                                st.write(f"  📍 SMA20: ${technical['sma_20']:.2f}")
+                                st.write(f"  📍 SMA50: ${technical['sma_50']:.2f}")
+                                st.write(f"  📍 SMA200: ${technical['sma_200']:.2f}")
+                            
+                            with col_right:
+                                st.write("**⚡ Volatility & Momentum:**")
+                                st.write(f"  📈 ATR: {technical['atr']:.4f}")
+                                st.write(f"  📊 MACD: {technical['macd']:.6f}")
+                            
+                            # Reasons
+                            st.write("**🎯 เหตุผลสัญญาณ:**")
+                            for i, reason in enumerate(signals['reasons'][:3], 1):
+                                st.write(f"  {i}. {reason}")
+                        
+                        st.divider()
+                    else:
+                        st.error(f"❌ ไม่สามารถดึงข้อมูล {symbol} - อาจเป็นหุ้นที่ delisted หรือสัญลักษณ์ไม่ถูกต้อง")
     
     # Tab 2: Buy Signals
     with tab2:
         st.header("💚 โอกาสในการซื้อ")
         
-        buy_opps = app.find_buy_opportunities(selected_stocks, min_confidence)
+        # Filter options
+        col_filter_buy1, col_filter_buy2 = st.columns(2)
+        with col_filter_buy1:
+            min_confidence_buy = st.slider(
+                "ความมั่นใจขั้นต่ำ",
+                min_value=30,
+                max_value=100,
+                value=min_confidence,
+                step=5,
+                key="buy_confidence_filter"
+            )
+        with col_filter_buy2:
+            max_price_buy = st.number_input(
+                "ราคาสูงสุด ($)",
+                min_value=0.0,
+                value=1000.0,
+                step=10.0,
+                key="buy_price_filter"
+            )
+        
+        st.divider()
+        
+        buy_opps = app.find_buy_opportunities(selected_stocks, min_confidence_buy / 100)
         
         if buy_opps:
-            for opp in buy_opps:
-                with st.container():
-                    col1, col2, col3 = st.columns(3)
-                    
-                    with col1:
-                        st.markdown(f"### {opp['symbol']}")
-                        st.metric("ระดับความเชื่อมั่น", f"{opp['confidence']:.1%}")
-                    
-                    with col2:
-                        st.metric("จุดเข้า", f"${opp['entry_price']:.2f}")
-                        st.metric("เป้าหมาย", f"${opp['target_price']:.2f}")
-                    
-                    with col3:
-                        st.metric("ตัดขาดทุน", f"${opp['stop_loss']:.2f}")
-                        if opp['entry_price'] != 0:
-                            profit_potential = ((opp['target_price'] - opp['entry_price']) / 
-                                              opp['entry_price'] * 100)
-                        else:
-                            profit_potential = 0
-                        st.metric("ศักยภาพกำไร", f"{profit_potential:.1f}%")
-                    
-                    # Reasons
-                    st.write("**เหตุผล:**")
-                    for reason in opp['reasons']:
-                        st.write(f"• {reason}")
-                    
-                    st.divider()
+            # Display as cards
+            num_cols = min(len(buy_opps), 3)
+            cols = st.columns(num_cols)
+            
+            for idx, opp in enumerate(buy_opps):
+                with cols[idx % num_cols]:
+                    with st.container(border=True):
+                        # Header with signal emoji
+                        st.markdown(f"## 🟢 {opp['symbol']}")
+                        
+                        # Confidence bar
+                        confidence_pct = opp['confidence']
+                        st.progress(confidence_pct, text=f"ความมั่นใจ: {confidence_pct:.1%}")
+                        
+                        # Key metrics in columns
+                        metric_col1, metric_col2 = st.columns(2)
+                        with metric_col1:
+                            st.metric("ราคาเข้า", f"${opp.get('entry_price', opp.get('latest_price', 0)):.2f}")
+                        with metric_col2:
+                            st.metric("Target", f"${opp.get('target_price', 0):.2f}")
+                        
+                        # Stop Loss
+                        st.metric("Stop Loss", f"${opp.get('stop_loss', 0):.2f}")
+                        
+                        # Reason with icon
+                        reason_text = ", ".join(opp.get('reasons', []))
+                        st.info(f"📌 **เหตุผล:** {reason_text}")
         else:
-            st.info("ไม่พบสัญญาณซื้อที่ตรงกับเกณฑ์ความเชื่อมั่น")
+            st.info("ℹ️ ยังไม่มีสัญญาณซื้อในขณะนี้")
     
     # Tab 3: Sell Signals
     with tab3:
         st.header("📉 โอกาสในการขาย")
         
-        sell_opps = app.find_sell_opportunities(selected_stocks, min_confidence)
-        
-        if sell_opps:
-            for opp in sell_opps:
-                with st.container():
-                    col1, col2, col3 = st.columns(3)
-                    
-                    with col1:
-                        st.markdown(f"### {opp['symbol']}")
-                        st.metric("ระดับความเชื่อมั่น", f"{opp['confidence']:.1%}")
-                    
-                    with col2:
-                        st.metric("ราคาออก", f"${opp['exit_price']:.2f}")
-                    
-                    with col3:
-                        st.info("ลองพิจารณาออกจากตำแหน่ง")
-                    
-                    # Reasons
-                    st.write("**เหตุผล:**")
-                    for reason in opp['reasons']:
-                        st.write(f"• {reason}")
-                    
-                    st.divider()
-        else:
-            st.info("ไม่พบสัญญาณขายที่ตรงกับเกณฑ์ความเชื่อมั่น")
-    
-    # Tab 4: Hot Stocks
-    with tab4:
-        st.header("🔥 สรุปหุ้นฮอต")
-        
-        hot = app.get_hot_stocks(selected_stocks)
-        
-        col1, col2, col3, col4 = st.columns(4)
-        
-        with col1:
-            st.metric("🟢 ซื้อแรง", len(hot['strong_buys']))
-        with col2:
-            st.metric("💚 ซื้อ", len(hot['buys']))
-        with col3:
-            st.metric("📉 ขาย", len(hot['sells']))
-        with col4:
-            st.metric("🔴 ขายแรง", len(hot['strong_sells']))
+        # Filter options
+        col_filter_sell1, col_filter_sell2 = st.columns(2)
+        with col_filter_sell1:
+            min_confidence_sell = st.slider(
+                "ความมั่นใจขั้นต่ำ",
+                min_value=30,
+                max_value=100,
+                value=min_confidence,
+                step=5,
+                key="sell_confidence_filter"
+            )
+        with col_filter_sell2:
+            max_loss_sell = st.number_input(
+                "ขาดทุนสูงสุด (%)",
+                min_value=0.0,
+                value=100.0,
+                step=5.0,
+                key="sell_loss_filter"
+            )
         
         st.divider()
         
-        # Strong Buys
-        if hot['strong_buys']:
-            st.subheader("🟢 สัญญาณซื้อแรง")
-            for stock in hot['strong_buys']:
-                st.success(f"{stock['symbol']} - ระดับความเชื่อมั่น: {stock['confidence']:.1%}")
-                for reason in stock['reasons']:
-                    st.write(f"  • {reason}")
+        sell_opps = app.find_sell_opportunities(selected_stocks, min_confidence_sell / 100)
         
-        # Buys
-        if hot['buys']:
-            st.subheader("💚 สัญญาณซื้อ")
-            for stock in hot['buys']:
-                st.info(f"{stock['symbol']} - ระดับความเชื่อมั่น: {stock['confidence']:.1%}")
-                for reason in stock['reasons']:
-                    st.write(f"  • {reason}")
+        if sell_opps:
+            # Display as cards
+            num_cols = min(len(sell_opps), 3)
+            cols = st.columns(num_cols)
+            
+            for idx, opp in enumerate(sell_opps):
+                with cols[idx % num_cols]:
+                    with st.container(border=True):
+                        # Header with signal emoji
+                        st.markdown(f"## 🔴 {opp['symbol']}")
+                        
+                        # Confidence bar
+                        confidence_pct = opp['confidence']
+                        st.progress(confidence_pct, text=f"ความมั่นใจ: {confidence_pct:.1%}")
+                        
+                        # Key metrics in columns
+                        metric_col1, metric_col2 = st.columns(2)
+                        with metric_col1:
+                            st.metric("ราคาออก", f"${opp.get('latest_price', 0):.2f}")
+                        with metric_col2:
+                            st.metric("Target ขาย", f"${opp.get('target_price', 0):.2f}")
+                        
+                        # Take Profit
+                        st.metric("Take Profit", f"${opp.get('stop_loss', 0):.2f}")
+                        
+                        # Reason with warning style
+                        reason_text = ", ".join(opp.get('reasons', []))
+                        st.warning(f"📌 **เหตุผล:** {reason_text}")
+        else:
+            st.info("ℹ️ ยังไม่มีสัญญาณขายในขณะนี้")
+      
+    # Tab 4: Hot Stocks
+    with tab4:
+        st.header("🔥 หุ้นนำหน้า")
         
-        # Sells
-        if hot['sells']:
-            st.subheader("📉 สัญญาณขาย")
-            for stock in hot['sells']:
-                st.warning(f"{stock['symbol']} - ระดับความเชื่อมั่น: {stock['confidence']:.1%}")
-                for reason in stock['reasons']:
-                    st.write(f"  • {reason}")
+        st.write("หุ้นที่มีการเคลื่อนไหวสูงและมีศักยภาพสูง")
         
-        # Strong Sells
-        if hot['strong_sells']:
-            st.subheader("🔴 สัญญาณขายแรง")
-            for stock in hot['strong_sells']:
-                st.error(f"{stock['symbol']} - ระดับความเชื่อมั่น: {stock['confidence']:.1%}")
-                for reason in stock['reasons']:
-                    st.write(f"  • {reason}")
+        try:
+            hot = app.get_hot_stocks(selected_stocks)
+            
+            col1, col2, col3, col4 = st.columns(4)
+            
+            with col1:
+                st.metric("🟢 ซื้อแรง", len(hot.get('strong_buys', [])))
+            with col2:
+                st.metric("💚 ซื้อ", len(hot.get('buys', [])))
+            with col3:
+                st.metric("📉 ขาย", len(hot.get('sells', [])))
+            with col4:
+                st.metric("🔴 ขายแรง", len(hot.get('strong_sells', [])))
+            
+            st.divider()
+            
+            # Strong Buys
+            if hot.get('strong_buys'):
+                st.subheader("🟢 สัญญาณซื้อแรง")
+                for stock in hot['strong_buys']:
+                    st.success(f"{stock['symbol']} - ระดับความเชื่อมั่น: {stock['confidence']:.1%}")
+                    for reason in stock['reasons']:
+                        st.write(f"  • {reason}")
+            
+            # Buys
+            if hot.get('buys'):
+                st.subheader("💚 สัญญาณซื้อ")
+                for stock in hot['buys']:
+                    st.info(f"{stock['symbol']} - ระดับความเชื่อมั่น: {stock['confidence']:.1%}")
+                    for reason in stock['reasons']:
+                        st.write(f"  • {reason}")
+            
+            # Sells
+            if hot.get('sells'):
+                st.subheader("📉 สัญญาณขาย")
+                for stock in hot['sells']:
+                    st.warning(f"{stock['symbol']} - ระดับความเชื่อมั่น: {stock['confidence']:.1%}")
+                    for reason in stock['reasons']:
+                        st.write(f"  • {reason}")
+            
+            # Strong Sells
+            if hot.get('strong_sells'):
+                st.subheader("🔴 สัญญาณขายแรง")
+                for stock in hot['strong_sells']:
+                    st.error(f"{stock['symbol']} - ระดับความเชื่อมั่น: {stock['confidence']:.1%}")
+                    for reason in stock['reasons']:
+                        st.write(f"  • {reason}")
+        except Exception as e:
+            st.error(f"⚠️ เกิดข้อผิดพลาด: {str(e)}")
     
     # Tab 5: Microcap Stocks
     with tab5:
@@ -991,3 +1160,5 @@ st.markdown("""
 ---
 **ข้อปฏิเสธ**: นี่คือเพื่อวัตถุประสงค์ทางการศึกษาเท่านั้น ไม่ใช่คำแนะนำทางการเงิน
 อัปเดตล่าสุด: """ + datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
+
+
