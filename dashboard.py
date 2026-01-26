@@ -21,6 +21,8 @@ from src.details.provider import StockDetailsProvider
 from src.details.widget import StockInfoWidget
 from src.dividend.analyzer import DividendAnalyzer
 from src.portfolio.manager import PortfolioManager
+from src.backtesting.backtester import Backtester
+from src.backtesting.metrics import PerformanceMetrics
 
 
 # ตั้งค่าเพจ
@@ -59,8 +61,8 @@ st.markdown('<div class="nav-bar"><div class="nav-title">📊 แอปพลิ
 if 'current_page' not in st.session_state:
     st.session_state.current_page = "วิเคราะห์หุ้น"
 
-# Navigation Menu
-col_nav1, col_nav2, col_nav3 = st.columns(3)
+# Navigation Menu (4 buttons)
+col_nav1, col_nav2, col_nav3, col_nav4 = st.columns(4)
 
 with col_nav1:
     if st.button("📊 Dashboard", use_container_width=True, type="primary" if st.session_state.current_page == "Dashboard" else "secondary"):
@@ -75,6 +77,11 @@ with col_nav2:
 with col_nav3:
     if st.button("📈 วิเคราะห์หุ้น", use_container_width=True, type="primary" if st.session_state.current_page == "วิเคราะห์หุ้น" else "secondary"):
         st.session_state.current_page = "วิเคราะห์หุ้น"
+        st.rerun()
+
+with col_nav4:
+    if st.button("🔬 Backtesting", use_container_width=True, type="primary" if st.session_state.current_page == "Backtesting" else "secondary"):
+        st.session_state.current_page = "Backtesting"
         st.rerun()
 
 st.divider()
@@ -1392,6 +1399,305 @@ elif st.session_state.current_page == "วิเคราะห์หุ้น":
         # Display message if no stocks selected
     else:
         st.info("👈 กรุณาเลือกหุ้นจากเมนูด้านซ้าย หรือเลือกเมนู Dashboard/Portfolio")
+
+# PAGE 4: Backtesting
+elif st.session_state.current_page == "Backtesting":
+    st.header("🔬 Backtesting - ทดสอบกลยุทธ์การเทรด")
+    st.markdown("### ทดสอบกลยุทธ์กับข้อมูลในอดีต เพื่อดูว่าจะได้กำไรหรือขาดทุนอย่างไร")
+    
+    # Create two columns for configuration
+    config_col1, config_col2 = st.columns(2)
+    
+    with config_col1:
+        st.subheader("⚙️ การตั้งค่า Backtest")
+        
+        # Stock selection - แบบพิมพ์เอง + เลือกจากลิสต์
+        st.markdown("**เลือกหุ้นที่ต้องการทดสอบ**")
+        
+        # ช่องพิมพ์ชื่อหุ้นเอง
+        custom_stocks_input = st.text_input(
+            "พิมพ์รหัสหุ้น (คั่นด้วยเครื่องหมายจุลภาค)",
+            placeholder="เช่น AAPL, TSLA, NVDA",
+            help="พิมพ์รหัสหุ้นที่ต้องการ คั่นด้วยเครื่องหมายจุลภาค (,)"
+        )
+        
+        # ลิสต์หุ้นแนะนำ
+        available_stocks = ['AAPL', 'MSFT', 'GOOGL', 'AMZN', 'TSLA', 'META', 'NVDA', 
+                           'NFLX', 'AMD', 'JPM', 'BAC', 'WFC', 'GS', 'MS']
+        
+        selected_from_list = st.multiselect(
+            "หรือเลือกจากลิสต์",
+            available_stocks,
+            default=[],
+            help="เลือกหุ้นจากรายการที่แนะนำ"
+        )
+        
+        # รวมหุ้นจากทั้ง 2 แหล่ง
+        backtest_stocks = []
+        
+        # จากช่องพิมพ์
+        if custom_stocks_input:
+            custom_stocks = [s.strip().upper() for s in custom_stocks_input.split(',') if s.strip()]
+            backtest_stocks.extend(custom_stocks)
+        
+        # จากลิสต์
+        if selected_from_list:
+            backtest_stocks.extend(selected_from_list)
+        
+        # ลบตัวซ้ำ
+        backtest_stocks = list(set(backtest_stocks))
+        
+        # แสดงหุ้นที่เลือก
+        if backtest_stocks:
+            st.info(f"📊 หุ้นที่จะทดสอบ: {', '.join(sorted(backtest_stocks))}")
+        else:
+            st.warning("⚠️ กรุณาเลือกหรือพิมพ์ชื่อหุ้นที่ต้องการทดสอบ")
+        
+        # Date range
+        col_date1, col_date2 = st.columns(2)
+        with col_date1:
+            start_date = st.date_input(
+                "วันเริ่มต้น",
+                value=pd.Timestamp('2024-01-01'),
+                help="วันเริ่มต้นของการทดสอบ"
+            )
+        
+        with col_date2:
+            end_date = st.date_input(
+                "วันสิ้นสุด",
+                value=pd.Timestamp(datetime.now().date()),
+                help="วันสิ้นสุดของการทดสอบ"
+            )
+        
+        # Strategy parameters
+        min_confidence = st.slider(
+            "ความมั่นใจขั้นต่ำ (%)",
+            min_value=30,
+            max_value=100,
+            value=60,
+            step=5,
+            help="ระดับความมั่นใจขั้นต่ำของสัญญาณซื้อขาย"
+        )
+    
+    with config_col2:
+        st.subheader("💰 การตั้งค่าเงินทุน")
+        
+        initial_capital = st.number_input(
+            "เงินทุนเริ่มต้น ($)",
+            min_value=1000,
+            max_value=1000000,
+            value=10000,
+            step=1000,
+            help="จำนวนเงินเริ่มต้นในการทดสอบ"
+        )
+        
+        position_size_pct = st.slider(
+            "ขนาด Position (% ของเงินทุน)",
+            min_value=10,
+            max_value=100,
+            value=20,
+            step=5,
+            help="เปอร์เซ็นต์ของเงินทุนที่จะใช้ต่อ 1 trade"
+        ) / 100
+        
+        commission = st.number_input(
+            "ค่า Commission (%)",
+            min_value=0.0,
+            max_value=1.0,
+            value=0.1,
+            step=0.05,
+            help="ค่าธรรมเนียมการซื้อขาย"
+        ) / 100
+        
+        slippage = st.number_input(
+            "Slippage (%)",
+            min_value=0.0,
+            max_value=1.0,
+            value=0.05,
+            step=0.05,
+            help="ส่วนต่างของราคาจากราคาที่ต้องการ"
+        ) / 100
+    
+    st.divider()
+    
+    # Run backtest button
+    if st.button("🚀 เริ่มทดสอบ", type="primary", use_container_width=True):
+        if not backtest_stocks:
+            st.error("❌ กรุณาเลือกหุ้นอย่างน้อย 1 ตัว")
+        elif start_date >= end_date:
+            st.error("❌ วันเริ่มต้นต้องน้อยกว่าวันสิ้นสุด")
+        else:
+            with st.spinner("🔄 กำลังทำการทดสอบ... (อาจใช้เวลา 1-2 นาที)"):
+                try:
+                    # Initialize backtester
+                    backtester = Backtester(
+                        initial_capital=initial_capital,
+                        commission=commission,
+                        slippage=slippage,
+                        position_size_pct=position_size_pct
+                    )
+                    
+                    # Initialize app
+                    app = StockAnalyzerApp()
+                    
+                    # Run backtest
+                    results = backtester.run_backtest(
+                        analyzer_app=app,
+                        symbols=backtest_stocks,
+                        start_date=start_date.strftime('%Y-%m-%d'),
+                        end_date=end_date.strftime('%Y-%m-%d'),
+                        strategy='technical',
+                        min_confidence=min_confidence / 100
+                    )
+                    
+                    # Store results in session state
+                    st.session_state.backtest_results = results
+                    st.session_state.backtester = backtester
+                    st.success("✅ การทดสอบเสร็จสิ้น!")
+                    
+                except Exception as e:
+                    st.error(f"❌ เกิดข้อผิดพลาด: {str(e)}")
+                    import traceback
+                    st.code(traceback.format_exc())
+    
+    # Display results if available
+    if 'backtest_results' in st.session_state and st.session_state.backtest_results:
+        results = st.session_state.backtest_results
+        
+        st.divider()
+        st.header("📊 ผลลัพธ์การทดสอบ")
+        
+        # Performance metrics
+        col_metric1, col_metric2, col_metric3, col_metric4 = st.columns(4)
+        
+        with col_metric1:
+            total_return = results.get('total_return', 0)
+            st.metric(
+                "📈 ผลตอบแทน",
+                f"{total_return:+.2f}%",
+                delta=f"${results.get('final_capital', 0) - results.get('initial_capital', 0):,.2f}"
+            )
+        
+        with col_metric2:
+            st.metric(
+                "💰 เงินทุนสุดท้าย",
+                f"${results.get('final_capital', 0):,.2f}",
+                delta=f"จาก ${results.get('initial_capital', 0):,.2f}"
+            )
+        
+        with col_metric3:
+            st.metric(
+                "🎯 อัตราชนะ",
+                f"{results.get('win_rate', 0):.1f}%",
+                delta=f"{results.get('winning_trades', 0)}/{results.get('total_trades', 0)} trades"
+            )
+        
+        with col_metric4:
+            st.metric(
+                "📉 Max Drawdown",
+                f"{results.get('max_drawdown', 0):.2f}%",
+                delta="ลดลงสูงสุด",
+                delta_color="inverse"
+            )
+        
+        # Detailed metrics
+        st.divider()
+        
+        col_detail1, col_detail2, col_detail3 = st.columns(3)
+        
+        with col_detail1:
+            st.subheader("📊 สถิติการเทรด")
+            st.metric("จำนวน Trade ทั้งหมด", results.get('total_trades', 0))
+            st.metric("Trade ที่ได้กำไร", results.get('winning_trades', 0))
+            st.metric("Trade ที่ขาดทุน", results.get('losing_trades', 0))
+        
+        with col_detail2:
+            st.subheader("💵 กำไร/ขาดทุน")
+            st.metric("กำไรเฉลี่ย/Trade", f"${results.get('avg_win', 0):.2f}")
+            st.metric("ขาดทุนเฉลี่ย/Trade", f"${results.get('avg_loss', 0):.2f}")
+            st.metric("Profit Factor", f"{results.get('profit_factor', 0):.2f}")
+        
+        with col_detail3:
+            st.subheader("📈 Performance Metrics")
+            
+            # Calculate advanced metrics
+            if 'equity_curve' in results and not results['equity_curve'].empty:
+                equity_curve = results['equity_curve']
+                metrics_report = PerformanceMetrics.generate_report(results, equity_curve)
+                
+                st.metric("Sharpe Ratio", f"{metrics_report.get('sharpe_ratio', 0):.2f}")
+                st.metric("Sortino Ratio", f"{metrics_report.get('sortino_ratio', 0):.2f}")
+                st.metric("Volatility", f"{metrics_report.get('volatility', 0):.2f}%")
+        
+        # Equity Curve Chart
+        st.divider()
+        st.subheader("📈 Equity Curve - มูลค่า Portfolio ตลอดเวลา")
+        
+        if 'equity_curve' in results and not results['equity_curve'].empty:
+            equity_curve = results['equity_curve']
+            
+            fig_equity = go.Figure()
+            
+            fig_equity.add_trace(go.Scatter(
+                x=equity_curve.index,
+                y=equity_curve['Portfolio Value'],
+                mode='lines',
+                name='Portfolio Value',
+                line=dict(color='#00D9FF', width=2),
+                fill='tozeroy',
+                fillcolor='rgba(0, 217, 255, 0.1)'
+            ))
+            
+            # Add initial capital line
+            fig_equity.add_hline(
+                y=results.get('initial_capital', 0),
+                line_dash="dash",
+                line_color="yellow",
+                annotation_text="Initial Capital"
+            )
+            
+            fig_equity.update_layout(
+                title="Portfolio Value Over Time",
+                xaxis_title="Date",
+                yaxis_title="Portfolio Value ($)",
+                template="plotly_dark",
+                height=500,
+                hovermode='x unified'
+            )
+            
+            st.plotly_chart(fig_equity, use_container_width=True)
+        
+        # Trade History
+        st.divider()
+        st.subheader("📋 ประวัติการซื้อขาย")
+        
+        if 'backtester' in st.session_state:
+            backtester = st.session_state.backtester
+            trade_history = backtester.get_trade_history()
+            
+            if not trade_history.empty:
+                # Add color coding
+                def highlight_profit(row):
+                    if row['Action'] == 'SELL':
+                        if row['P/L'] > 0:
+                            return ['background-color: rgba(0, 255, 0, 0.1)'] * len(row)
+                        elif row['P/L'] < 0:
+                            return ['background-color: rgba(255, 0, 0, 0.1)'] * len(row)
+                    return [''] * len(row)
+                
+                styled_df = trade_history.style.apply(highlight_profit, axis=1)
+                st.dataframe(styled_df, use_container_width=True, hide_index=True)
+                
+                # Download button
+                csv = trade_history.to_csv(index=False)
+                st.download_button(
+                    label="📥 ดาวน์โหลด Trade History",
+                    data=csv,
+                    file_name=f"backtest_trades_{datetime.now().strftime('%Y%m%d')}.csv",
+                    mime="text/csv"
+                )
+            else:
+                st.info("ไม่มีประวัติการซื้อขาย")
     
 # Display message if not in Stock Analysis page
 else:

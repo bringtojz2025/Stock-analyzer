@@ -28,7 +28,7 @@ st.set_page_config(
 # Navigation
 page = st.sidebar.radio(
     "📊 เลือกหน้า",
-    ["🏠 Dashboard", "💼 Portfolio Management"],
+    ["🏠 Dashboard", "💼 Portfolio"],
     key="portfolio_nav"
 )
 
