@@ -1,0 +1,56 @@
+[
+  {
+    "symbol": "NVDA",
+    "shares": 2.296,
+    "buy_price": 177.48,
+    "buy_date": "2025-12-30",
+    "notes": "",
+    "added_at": "2026-01-26 13:49:28",
+    "last_updated": "2026-01-26 13:49:28"
+  },
+  {
+    "symbol": "DNN",
+    "shares": 12.4,
+    "buy_price": 3.39,
+    "buy_date": "2025-12-30",
+    "notes": "",
+    "added_at": "2026-01-26 13:50:10",
+    "last_updated": "2026-01-26 13:50:10"
+  },
+  {
+    "symbol": "EOSE",
+    "shares": 1.404,
+    "buy_price": 16.8,
+    "buy_date": "2025-12-30",
+    "notes": "",
+    "added_at": "2026-01-26 13:50:55",
+    "last_updated": "2026-01-26 13:50:55"
+  },
+  {
+    "symbol": "QQQI",
+    "shares": 1.0,
+    "buy_price": 54.25,
+    "buy_date": "2025-12-30",
+    "notes": "",
+    "added_at": "2026-01-26 13:51:23",
+    "last_updated": "2026-01-26 13:51:23"
+  },
+  {
+    "symbol": "ULTY",
+    "shares": 1.7,
+    "buy_price": 52.77,
+    "buy_date": "2025-12-30",
+    "notes": "",
+    "added_at": "2026-01-26 13:51:50",
+    "last_updated": "2026-01-26 13:52:23"
+  },
+  {
+    "symbol": "TSYY",
+    "shares": 9.0,
+    "buy_price": 8.14,
+    "buy_date": "2025-12-30",
+    "notes": "",
+    "added_at": "2026-01-26 13:53:20",
+    "last_updated": "2026-01-26 13:53:20"
+  }
+]

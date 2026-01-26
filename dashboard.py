@@ -10,6 +10,7 @@ import os
 import plotly.graph_objects as go
 import yfinance as yf
 import pandas as pd
+import subprocess
 
 # Add src to path
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -19,6 +20,7 @@ from src.discovery.scanner import StockScanner
 from src.details.provider import StockDetailsProvider
 from src.details.widget import StockInfoWidget
 from src.dividend.analyzer import DividendAnalyzer
+from src.portfolio.manager import PortfolioManager
 
 
 # ตั้งค่าเพจ
@@ -29,9 +31,53 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# ชื่อเรื่องและคำอธิบาย
-st.title("📊 แอปพลิเคชันวิเคราะห์หุ้น USA")
-st.markdown("วิเคราะห์แบบเรียลไทม์ด้วยสัญญาณซื้อขายที่ขับเคลื่อนโดย AI")
+# ========================
+# Navigation Bar
+# ========================
+st.markdown("""
+<style>
+    .nav-bar {
+        background: linear-gradient(90deg, #1e3c72 0%, #2a5298 100%);
+        padding: 1rem 2rem;
+        border-radius: 10px;
+        margin-bottom: 2rem;
+        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+    }
+    .nav-title {
+        color: #ffffff;
+        font-size: 1.5rem;
+        font-weight: bold;
+        margin-bottom: 1rem;
+        text-align: center;
+    }
+</style>
+""", unsafe_allow_html=True)
+
+st.markdown('<div class="nav-bar"><div class="nav-title">📊 แอปพลิเคชันวิเคราะห์หุ้น USA</div></div>', unsafe_allow_html=True)
+
+# Initialize session state for navigation
+if 'current_page' not in st.session_state:
+    st.session_state.current_page = "วิเคราะห์หุ้น"
+
+# Navigation Menu
+col_nav1, col_nav2, col_nav3 = st.columns(3)
+
+with col_nav1:
+    if st.button("📊 Dashboard", use_container_width=True, type="primary" if st.session_state.current_page == "Dashboard" else "secondary"):
+        st.session_state.current_page = "Dashboard"
+        st.rerun()
+
+with col_nav2:
+    if st.button("💼 Portfolio", use_container_width=True, type="primary" if st.session_state.current_page == "Portfolio" else "secondary"):
+        st.session_state.current_page = "Portfolio"
+        st.rerun()
+
+with col_nav3:
+    if st.button("📈 วิเคราะห์หุ้น", use_container_width=True, type="primary" if st.session_state.current_page == "วิเคราะห์หุ้น" else "secondary"):
+        st.session_state.current_page = "วิเคราะห์หุ้น"
+        st.rerun()
+
+st.divider()
 
 # Sidebar
 with st.sidebar:
@@ -500,665 +546,862 @@ with st.sidebar:
 # Initialize app
 app = StockAnalyzerApp()
 
-# Main content
-if selected_stocks:
-    # Display summary info
-    col_summary1, col_summary2, col_summary3 = st.columns(3)
-    with col_summary1:
-        st.metric("📊 จำนวนหุ้นที่วิเคราะห์", len(selected_stocks))
-    with col_summary2:
-        st.metric("📅 ช่วงเวลา", period)
-    with col_summary3:
-        st.metric("🎯 ความมั่นใจขั้นต่ำ", f"{min_confidence}%")
+# ========================
+# PAGE ROUTING
+# ========================
+
+# PAGE 1: Dashboard (Portfolio Dashboard with Real-time FX)
+if st.session_state.current_page == "Dashboard":
+    st.header("📊 Dashboard - ภาพรวมพอร์ตโฟลิโอ")
+    
+    # Import real-time exchange rate
+    try:
+        from src.utils.exchange_rate import ExchangeRateFetcher
+        fx_fetcher = ExchangeRateFetcher()
+        rate_info = fx_fetcher.get_rate_with_source()
+        usd_to_thb = rate_info['rate']
+        
+        # Display FX info
+        col_fx1, col_fx2, col_fx3 = st.columns(3)
+        with col_fx1:
+            st.metric("💱 อัตราแลกเปลี่ยน USD/THB", f"฿{usd_to_thb:.4f}")
+        with col_fx2:
+            st.metric("📡 แหล่งข้อมูล", rate_info['source'])
+        with col_fx3:
+            st.metric("🕐 อัปเดต", rate_info['timestamp'])
+    except:
+        usd_to_thb = 35.5
+        st.warning(f"⚠️ ใช้อัตราแลกเปลี่ยนเริ่มต้น: ฿{usd_to_thb:.2f}/USD")
     
     st.divider()
     
-    # Tabs with better styling
-    tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs(
-        ["📈 การวิเคราะห์ทั้งหมด", "💚 สัญญาณซื้อ", "📉 สัญญาณขาย", "🔥 หุ้นฮอต", "💎 หุ้นจิ๋ว", "📊 รายละเอียดหุ้น"]
-    )
+    # Initialize Portfolio Manager
+    portfolio_mgr = PortfolioManager()
+    portfolio_stocks = portfolio_mgr.get_symbols()
     
-    # Tab 1: Analysis
-    with tab1:
-        st.header("📈 วิเคราะห์เทคนิค")
+    if not portfolio_stocks:
+        st.info("📭 ยังไม่มีหุ้นในพอร์ต กรุณาเพิ่มหุ้นในเมนู Portfolio ก่อน")
+    else:
+        # Fetch current prices
+        import yfinance as yf
+        current_prices = {}
+        progress_bar = st.progress(0)
+        status_text = st.empty()
         
-        # Quick filters
-        col_filter1, col_filter2 = st.columns(2)
-        with col_filter1:
-            show_chart = st.checkbox("📊 แสดงกราฟ", value=True)
-        with col_filter2:
-            sort_by = st.selectbox(
-                "เรียงลำดับ",
-                ["ตามลำดับที่เลือก", "ตามราคา (สูง→ต่ำ)", "ตามราคา (ต่ำ→สูง)", "ตาม RSI (สูง→ต่ำ)"],
-                key="sort_analysis"
-            )
-        
-        st.divider()
-        
-        cols = st.columns(len(selected_stocks) if len(selected_stocks) <= 3 else 3)
-        
-        for idx, symbol in enumerate(selected_stocks):
-            with cols[idx % len(cols)]:
-                with st.spinner(f"🔄 กำลังวิเคราะห์ {symbol}..."):
-                    result = app.analyze_single_stock(symbol, period=period)
-                    
-
-                    if result:
-                        technical = result['technical']
-                        signals = result['signals']
-                        
-                        # Create metric cards with better styling and visual indicators
-                        st.markdown(f"### {symbol}")
-                        
-                        col_price, col_rsi, col_signal = st.columns(3)
-                        
-                        with col_price:
-                            st.metric(
-                                "💰 ราคา",
-                                f"${technical['latest_price']:.2f}",
-                                delta=None
-                            )
-                        
-                        with col_rsi:
-                            rsi_value = technical['rsi']
-                            rsi_status = "🔴 ขายมาก" if rsi_value > 70 else \
-                                        "✅ ซื้อมาก" if rsi_value < 30 else \
-                                        "🆗 ปกติ"
-                            st.metric("📊 RSI", f"{rsi_value:.1f}", delta=rsi_status)
-                        
-                        with col_signal:
-                            if signals['buy']:
-                                signal_display = '✅ ซื้อ'
-                            elif signals['sell']:
-                                signal_display = '⛔ ขาย'
-                            else:
-                                signal_display = '⏸️ คงตำแหน่ง'
-                            st.metric("📈 สัญญาณ", signal_display, delta=f"{signals['confidence']:.1%}")
-                        
-                        st.divider()
-                        
-                        # Price levels in expandable section
-                        with st.expander("📊 ตัวชี้วัดเพิ่มเติม"):
-                            col_left, col_right = st.columns(2)
-                            with col_left:
-                                st.write("**📉 Moving Averages:**")
-                                st.write(f"  📍 SMA20: ${technical['sma_20']:.2f}")
-                                st.write(f"  📍 SMA50: ${technical['sma_50']:.2f}")
-                                st.write(f"  📍 SMA200: ${technical['sma_200']:.2f}")
-                            
-                            with col_right:
-                                st.write("**⚡ Volatility & Momentum:**")
-                                st.write(f"  📈 ATR: {technical['atr']:.4f}")
-                                st.write(f"  📊 MACD: {technical['macd']:.6f}")
-                            
-                            # Reasons
-                            st.write("**🎯 เหตุผลสัญญาณ:**")
-                            for i, reason in enumerate(signals['reasons'][:3], 1):
-                                st.write(f"  {i}. {reason}")
-                        
-                        st.divider()
-                    else:
-                        st.error(f"❌ ไม่สามารถดึงข้อมูล {symbol} - อาจเป็นหุ้นที่ delisted หรือสัญลักษณ์ไม่ถูกต้อง")
-    
-    # Tab 2: Buy Signals
-    with tab2:
-        st.header("💚 โอกาสในการซื้อ")
-        
-        # Filter options
-        col_filter_buy1, col_filter_buy2 = st.columns(2)
-        with col_filter_buy1:
-            min_confidence_buy = st.slider(
-                "ความมั่นใจขั้นต่ำ",
-                min_value=30,
-                max_value=100,
-                value=min_confidence,
-                step=5,
-                key="buy_confidence_filter"
-            )
-        with col_filter_buy2:
-            max_price_buy = st.number_input(
-                "ราคาสูงสุด ($)",
-                min_value=0.0,
-                value=1000.0,
-                step=10.0,
-                key="buy_price_filter"
-            )
-        
-        st.divider()
-        
-        buy_opps = app.find_buy_opportunities(selected_stocks, min_confidence_buy / 100)
-        
-        if buy_opps:
-            # Display as cards
-            num_cols = min(len(buy_opps), 3)
-            cols = st.columns(num_cols)
-            
-            for idx, opp in enumerate(buy_opps):
-                with cols[idx % num_cols]:
-                    with st.container(border=True):
-                        # Header with signal emoji
-                        st.markdown(f"## 🟢 {opp['symbol']}")
-                        
-                        # Confidence bar
-                        confidence_pct = opp['confidence']
-                        st.progress(confidence_pct, text=f"ความมั่นใจ: {confidence_pct:.1%}")
-                        
-                        # Key metrics in columns
-                        metric_col1, metric_col2 = st.columns(2)
-                        with metric_col1:
-                            st.metric("ราคาเข้า", f"${opp.get('entry_price', opp.get('latest_price', 0)):.2f}")
-                        with metric_col2:
-                            st.metric("Target", f"${opp.get('target_price', 0):.2f}")
-                        
-                        # Stop Loss
-                        st.metric("Stop Loss", f"${opp.get('stop_loss', 0):.2f}")
-                        
-                        # Reason with icon
-                        reason_text = ", ".join(opp.get('reasons', []))
-                        st.info(f"📌 **เหตุผล:** {reason_text}")
-        else:
-            st.info("ℹ️ ยังไม่มีสัญญาณซื้อในขณะนี้")
-    
-    # Tab 3: Sell Signals
-    with tab3:
-        st.header("📉 โอกาสในการขาย")
-        
-        # Filter options
-        col_filter_sell1, col_filter_sell2 = st.columns(2)
-        with col_filter_sell1:
-            min_confidence_sell = st.slider(
-                "ความมั่นใจขั้นต่ำ",
-                min_value=30,
-                max_value=100,
-                value=min_confidence,
-                step=5,
-                key="sell_confidence_filter"
-            )
-        with col_filter_sell2:
-            max_loss_sell = st.number_input(
-                "ขาดทุนสูงสุด (%)",
-                min_value=0.0,
-                value=100.0,
-                step=5.0,
-                key="sell_loss_filter"
-            )
-        
-        st.divider()
-        
-        sell_opps = app.find_sell_opportunities(selected_stocks, min_confidence_sell / 100)
-        
-        if sell_opps:
-            # Display as cards
-            num_cols = min(len(sell_opps), 3)
-            cols = st.columns(num_cols)
-            
-            for idx, opp in enumerate(sell_opps):
-                with cols[idx % num_cols]:
-                    with st.container(border=True):
-                        # Header with signal emoji
-                        st.markdown(f"## 🔴 {opp['symbol']}")
-                        
-                        # Confidence bar
-                        confidence_pct = opp['confidence']
-                        st.progress(confidence_pct, text=f"ความมั่นใจ: {confidence_pct:.1%}")
-                        
-                        # Key metrics in columns
-                        metric_col1, metric_col2 = st.columns(2)
-                        with metric_col1:
-                            st.metric("ราคาออก", f"${opp.get('latest_price', 0):.2f}")
-                        with metric_col2:
-                            st.metric("Target ขาย", f"${opp.get('target_price', 0):.2f}")
-                        
-                        # Take Profit
-                        st.metric("Take Profit", f"${opp.get('stop_loss', 0):.2f}")
-                        
-                        # Reason with warning style
-                        reason_text = ", ".join(opp.get('reasons', []))
-                        st.warning(f"📌 **เหตุผล:** {reason_text}")
-        else:
-            st.info("ℹ️ ยังไม่มีสัญญาณขายในขณะนี้")
-      
-    # Tab 4: Hot Stocks
-    with tab4:
-        st.header("🔥 หุ้นนำหน้า")
-        
-        st.write("หุ้นที่มีการเคลื่อนไหวสูงและมีศักยภาพสูง")
-        
-        try:
-            hot = app.get_hot_stocks(selected_stocks)
-            
-            col1, col2, col3, col4 = st.columns(4)
-            
-            with col1:
-                st.metric("🟢 ซื้อแรง", len(hot.get('strong_buys', [])))
-            with col2:
-                st.metric("💚 ซื้อ", len(hot.get('buys', [])))
-            with col3:
-                st.metric("📉 ขาย", len(hot.get('sells', [])))
-            with col4:
-                st.metric("🔴 ขายแรง", len(hot.get('strong_sells', [])))
-            
-            st.divider()
-            
-            # Strong Buys
-            if hot.get('strong_buys'):
-                st.subheader("🟢 สัญญาณซื้อแรง")
-                for stock in hot['strong_buys']:
-                    st.success(f"{stock['symbol']} - ระดับความเชื่อมั่น: {stock['confidence']:.1%}")
-                    for reason in stock['reasons']:
-                        st.write(f"  • {reason}")
-            
-            # Buys
-            if hot.get('buys'):
-                st.subheader("💚 สัญญาณซื้อ")
-                for stock in hot['buys']:
-                    st.info(f"{stock['symbol']} - ระดับความเชื่อมั่น: {stock['confidence']:.1%}")
-                    for reason in stock['reasons']:
-                        st.write(f"  • {reason}")
-            
-            # Sells
-            if hot.get('sells'):
-                st.subheader("📉 สัญญาณขาย")
-                for stock in hot['sells']:
-                    st.warning(f"{stock['symbol']} - ระดับความเชื่อมั่น: {stock['confidence']:.1%}")
-                    for reason in stock['reasons']:
-                        st.write(f"  • {reason}")
-            
-            # Strong Sells
-            if hot.get('strong_sells'):
-                st.subheader("🔴 สัญญาณขายแรง")
-                for stock in hot['strong_sells']:
-                    st.error(f"{stock['symbol']} - ระดับความเชื่อมั่น: {stock['confidence']:.1%}")
-                    for reason in stock['reasons']:
-                        st.write(f"  • {reason}")
-        except Exception as e:
-            st.error(f"⚠️ เกิดข้อผิดพลาด: {str(e)}")
-    
-    # Tab 5: Microcap Stocks
-    with tab5:
-        st.header("💎 หุ้นจิ๋วที่น่าสนใจ")
-        
-        if isinstance(selected_stocks, list) and len(selected_stocks) > 0:
-            scanner = StockScanner()
-            
-            # สร้าง 2 คอลัมน์สำหรับตัวควบคุม
-            col1, col2 = st.columns(2)
-            
-            with col1:
-                st.subheader("📊 ข้อมูลหุ้นจิ๋ว")
-                st.write(f"**จำนวนหุ้นจิ๋ว:** {len(selected_stocks)} ตัว")
-                
-                # ตัวกรองราคาเพิ่มเติม
-                price_filter = st.checkbox("🎯 ตั้งค่าตัวกรองราคา", value=False)
-                if price_filter:
-                    filter_min = st.number_input("ราคาต่ำสุด ($)", min_value=0.0, max_value=50.0, value=0.0, step=0.1)
-                    filter_max = st.number_input("ราคาสูงสุด ($)", min_value=0.0, max_value=50.0, value=50.0, step=0.1)
+        for i, symbol in enumerate(portfolio_stocks):
+            try:
+                status_text.text(f"กำลังดึงข้อมูล {symbol}...")
+                ticker = yf.Ticker(symbol)
+                hist = ticker.history(period='1d')
+                if not hist.empty:
+                    current_prices[symbol] = hist['Close'].iloc[-1]
                 else:
-                    filter_min = 0.0
-                    filter_max = 50.0
+                    stock_info = portfolio_mgr.get_stock(symbol)
+                    current_prices[symbol] = stock_info['buy_price']
+            except:
+                stock_info = portfolio_mgr.get_stock(symbol)
+                current_prices[symbol] = stock_info['buy_price']
             
-            with col2:
-                if st.button("🔄 สแกนหุ้นจิ๋วโอกาสขึ้นแรง"):
-                    with st.spinner("กำลังสแกน..."):
-                        gainers = scanner.scan_microcap_gainers(min_price=filter_min, max_price=filter_max)
-                        st.success(f"✅ พบหุ้นที่น่าสนใจ (ราคา: ${filter_min:.2f} - ${filter_max:.2f}):")
-                        
-                        # High Volatility
-                        if gainers['high_volatility']:
-                            st.subheader("🎢 ความผันผวนสูง")
-                            for stock in gainers['high_volatility'][:5]:
-                                col_a, col_b, col_c = st.columns([1.5, 1, 1])
-                                with col_a:
-                                    st.write(f"**{stock['symbol']}**")
-                                with col_b:
-                                    st.metric("ราคา", f"${stock['price']:.2f}")
-                                with col_c:
-                                    st.metric("ผันผวน", f"{stock['volatility']:.1f}%")
-                                st.divider()
-                        
-                        # Breakout
-                        if gainers['breakout']:
-                            st.subheader("📈 ทะลุขึ้น (Breakout)")
-                            for stock in gainers['breakout'][:5]:
-                                col_a, col_b, col_c = st.columns([1.5, 1, 1])
-                                with col_a:
-                                    st.write(f"**{stock['symbol']}**")
-                                with col_b:
-                                    st.metric("ราคา", f"${stock['price']:.2f}")
-                                with col_c:
-                                    st.metric("ผันผวน", f"{stock['volatility']:.1f}%")
-                                st.divider()
-                        
-                        # Low Price High Gain
-                        if gainers['low_price_high_gain']:
-                            st.subheader("💰 ราคาต่ำแต่ศักยภาพสูง")
-                            for stock in gainers['low_price_high_gain'][:5]:
-                                col_a, col_b, col_c = st.columns([1.5, 1, 1])
-                                with col_a:
-                                    st.write(f"**{stock['symbol']}**")
-                                with col_b:
-                                    st.metric("ราคา", f"${stock['price']:.2f}")
-                                with col_c:
-                                    st.metric("ศักยภาพ", f"{stock['potential_upside']:.1f}%")
-                                st.divider()
-            
-            st.divider()
-            
-            # วิเคราะห์หุ้นจิ๋วที่เลือก
-            st.subheader("📈 วิเคราะห์หุ้นจิ๋ว")
-            
-            # ตัวกรองหุ้นตามราคา
-            analyze_filter = st.checkbox("📊 กรองหุ้นวิเคราะห์ตามราคา", value=False)
-            if analyze_filter:
-                analyze_min = st.number_input("ราคาต่ำสุดสำหรับวิเคราะห์ ($)", min_value=0.0, max_value=50.0, value=0.0, step=0.1)
-                analyze_max = st.number_input("ราคาสูงสุดสำหรับวิเคราะห์ ($)", min_value=0.0, max_value=50.0, value=50.0, step=0.1)
-            else:
-                analyze_min = 0.0
-                analyze_max = 50.0
-            
-            for symbol in selected_stocks[:10]:
-                with st.expander(f"📊 {symbol}"):
-                    # ดึงราคาปัจจุบัน
-                    try:
-                        ticker = __import__('yfinance').Ticker(symbol)
-                        current_price = ticker.info.get('currentPrice', None)
-                        
-                        # ตรวจสอบเงื่อนไขราคา
-                        if current_price is None or current_price < analyze_min or current_price > analyze_max:
-                            st.warning(f"⚠️ {symbol} ราคาไม่อยู่ในช่วง ${analyze_min:.2f} - ${analyze_max:.2f}")
-                            continue
-                    except:
-                        pass
-                    
-                    result = app.analyze_single_stock(symbol, period=period)
-                    
-                    if result:
-                        technical = result['technical']
-                        
-                        col1, col2, col3 = st.columns(3)
-                        
-                        with col1:
-                            st.metric("ราคาปัจจุบัน", f"${technical['latest_price']:.2f}")
-                            st.metric("RSI", f"{technical['rsi']:.1f}")
-                        
-                        with col2:
-                            st.metric("SMA20", f"${technical['sma_20']:.2f}")
-                            st.metric("SMA50", f"${technical['sma_50']:.2f}")
-                        
-                        with col3:
-                            st.metric("MACD", f"{technical['macd']:.4f}")
-                            st.metric("ATR", f"{technical['atr']:.4f}")
-                        
-                        # Signal
-                        signals = result['signals']
-                        signal_type = 'ซื้อ' if signals['buy'] else ('ขาย' if signals['sell'] else 'คงตำแหน่ง')
-                        signal_color = 'green' if signals['buy'] else 'red' if signals['sell'] else 'orange'
-                        
-                        st.markdown(f"**สัญญาณ:** :{signal_color}[{signal_type}] ({signals['confidence']:.1%})")
-                        st.write("**เหตุผล:**")
-                        for reason in signals['reasons']:
-                            st.write(f"• {reason}")
-    
-    # Tab 6: Stock Details with Charts
-    with tab6:
-        st.header("📊 รายละเอียดหุ้นแบบละเอียด")
+            progress_bar.progress((i + 1) / len(portfolio_stocks))
         
-        # Select stock for details
-        detail_stock = st.selectbox(
-            "เลือกหุ้นเพื่อดูรายละเอียด",
-            selected_stocks,
-            key="detail_stock_select"
+        status_text.empty()
+        progress_bar.empty()
+        
+        # Calculate portfolio value
+        portfolio_data = portfolio_mgr.calculate_portfolio_value(current_prices)
+        
+        # Display summary metrics (both USD and THB)
+        st.markdown("#### 💵 สกุลเงินดอลลาร์ (USD)")
+        col1, col2, col3, col4 = st.columns(4)
+        
+        with col1:
+            st.metric(
+                "💰 มูลค่ารวม",
+                f"${portfolio_data['total_value']:,.2f}",
+                delta=f"${portfolio_data['total_profit_loss']:,.2f}"
+            )
+        
+        with col2:
+            st.metric(
+                "💵 ต้นทุนรวม",
+                f"${portfolio_data['total_cost']:,.2f}"
+            )
+        
+        with col3:
+            profit_color = "normal" if portfolio_data['total_profit_loss'] >= 0 else "inverse"
+            st.metric(
+                "📈 กำไร/ขาดทุน",
+                f"${portfolio_data['total_profit_loss']:,.2f}",
+                delta=f"{portfolio_data['total_profit_loss_pct']:.2f}%",
+                delta_color=profit_color
+            )
+        
+        with col4:
+            st.metric(
+                "🎯 จำนวนหุ้น",
+                f"{portfolio_data['num_stocks']} ตัว"
+            )
+        
+        st.divider()
+        
+        # THB Row
+        total_value_thb = portfolio_data['total_value'] * usd_to_thb
+        total_cost_thb = portfolio_data['total_cost'] * usd_to_thb
+        total_profit_loss_thb = portfolio_data['total_profit_loss'] * usd_to_thb
+        
+        st.markdown(f"#### 💰 สกุลเงินบาท (THB) - อัตรา {usd_to_thb:.4f}")
+        col1, col2, col3, col4 = st.columns(4)
+        
+        with col1:
+            st.metric(
+                "💰 มูลค่ารวม",
+                f"฿{total_value_thb:,.2f}",
+                delta=f"฿{total_profit_loss_thb:,.2f}"
+            )
+        
+        with col2:
+            st.metric(
+                "💵 ต้นทุนรวม",
+                f"฿{total_cost_thb:,.2f}"
+            )
+        
+        with col3:
+            profit_color = "normal" if portfolio_data['total_profit_loss'] >= 0 else "inverse"
+            st.metric(
+                "📈 กำไร/ขาดทุน",
+                f"฿{total_profit_loss_thb:,.2f}",
+                delta=f"{portfolio_data['total_profit_loss_pct']:.2f}%",
+                delta_color=profit_color
+            )
+        
+        with col4:
+            st.metric(
+                "💱 อัตราแลกเปลี่ยน",
+                f"฿{usd_to_thb:.4f}/USD"
+            )
+        
+        st.divider()
+        
+        # Display individual stocks (13-column dual currency table)
+        st.markdown("#### 📋 รายละเอียดหุ้นแต่ละตัว")
+        
+        # Create DataFrame
+        import pandas as pd
+        df_stocks = pd.DataFrame(portfolio_data['stocks'])
+        
+        # Create display DataFrame with dual currency
+        df_display = pd.DataFrame()
+        df_display['รหัสหุ้น'] = df_stocks['symbol']
+        df_display['จำนวน'] = df_stocks['shares'].apply(lambda x: f"{x:.2f}")
+        df_display['ราคาซื้อ (USD)'] = df_stocks['buy_price'].apply(lambda x: f"${x:.2f}")
+        df_display['ราคาซื้อ (THB)'] = df_stocks['buy_price'].apply(lambda x: f"฿{x*usd_to_thb:.2f}")
+        df_display['ราคาปัจจุบัน (USD)'] = df_stocks['current_price'].apply(lambda x: f"${x:.2f}")
+        df_display['ราคาปัจจุบัน (THB)'] = df_stocks['current_price'].apply(lambda x: f"฿{x*usd_to_thb:.2f}")
+        df_display['ต้นทุน (USD)'] = df_stocks['cost'].apply(lambda x: f"${x:,.2f}")
+        df_display['ต้นทุน (THB)'] = df_stocks['cost'].apply(lambda x: f"฿{x*usd_to_thb:,.2f}")
+        df_display['มูลค่า (USD)'] = df_stocks['value'].apply(lambda x: f"${x:,.2f}")
+        df_display['มูลค่า (THB)'] = df_stocks['value'].apply(lambda x: f"฿{x*usd_to_thb:,.2f}")
+        df_display['กำไร/ขาดทุน (USD)'] = df_stocks.apply(
+            lambda row: f"{'💸' if row['profit_loss'] >= 0 else '🔴'} ${abs(row['profit_loss']):,.2f}",
+            axis=1
+        )
+        df_display['กำไร/ขาดทุน (THB)'] = df_stocks.apply(
+            lambda row: f"{'💸' if row['profit_loss'] >= 0 else '🔴'} ฿{abs(row['profit_loss']*usd_to_thb):,.2f}",
+            axis=1
+        )
+        df_display['% เปลี่ยนแปลง'] = df_stocks.apply(
+            lambda row: f"{'↗️' if row['profit_loss_pct'] >= 0 else '↘️'} {abs(row['profit_loss_pct']):.2f}%",
+            axis=1
         )
         
-        if detail_stock:
-            provider = StockDetailsProvider()
-            widget = StockInfoWidget()
+        st.dataframe(df_display, use_container_width=True, hide_index=True)
+        
+        # Portfolio composition chart
+        st.markdown("#### 📊 สัดส่วนการลงทุน")
+        
+        import plotly.graph_objects as go
+        fig = go.Figure(data=[go.Pie(
+            labels=[s['symbol'] for s in portfolio_data['stocks']],
+            values=[s['value'] for s in portfolio_data['stocks']],
+            hole=.3,
+            textinfo='label+percent',
+            textposition='auto'
+        )])
+        
+        fig.update_layout(
+            title="สัดส่วนมูลค่าหุ้นในพอร์ต",
+            height=400
+        )
+        
+        st.plotly_chart(fig, use_container_width=True)
+        
+        # Performance chart
+        st.markdown("#### 📈 ผลการลงทุนแต่ละตัว")
+        
+        symbols = [s['symbol'] for s in portfolio_data['stocks']]
+        profit_pcts = [s['profit_loss_pct'] for s in portfolio_data['stocks']]
+        
+        colors = ['green' if p >= 0 else 'red' for p in profit_pcts]
+        
+        fig2 = go.Figure(data=[go.Bar(
+            x=symbols,
+            y=profit_pcts,
+            marker_color=colors,
+            text=[f"{p:.2f}%" for p in profit_pcts],
+            textposition='auto'
+        )])
+        
+        fig2.update_layout(
+            title="ผลตอบแทนแต่ละหุ้น (%)",
+            xaxis_title="รหัสหุ้น",
+            yaxis_title="% กำไร/ขาดทุน",
+            height=400
+        )
+        
+        st.plotly_chart(fig2, use_container_width=True)
+
+# PAGE 2: Portfolio Management
+elif st.session_state.current_page == "Portfolio":
+    st.header("💼 จัดการ Portfolio")
+    st.markdown("### เพิ่ม แก้ไข หรือลบหุ้นในพอร์ต")
+    
+    # Initialize Portfolio Manager
+    portfolio_mgr = PortfolioManager()
+    
+    # Create two columns for layout
+    col_left, col_right = st.columns([1, 1])
+    
+    with col_left:
+        st.subheader("➕ เพิ่มหุ้นใหม่")
+        
+        with st.form("add_stock_form", clear_on_submit=True):
+            new_symbol = st.text_input("รหัสหุ้น (เช่น AAPL)", key="new_symbol").upper()
+            new_shares = st.number_input("จำนวนหุ้น", min_value=0.01, value=1.0, step=0.01, key="new_shares")
+            new_price = st.number_input("ราคาซื้อ ($)", min_value=0.01, value=100.0, step=0.01, key="new_price")
+            new_date = st.date_input("วันที่ซื้อ", value=datetime.now(), key="new_date")
+            new_notes = st.text_area("หมายเหตุ (ถ้ามี)", key="new_notes")
             
-            # Get stock details
-            with st.spinner(f"🔄 กำลังดึงข้อมูล {detail_stock}..."):
-                details = provider.get_enhanced_stock_info(detail_stock)
-                historical_data = provider.get_historical_data(detail_stock, period='1y')
-                price_change = provider.calculate_price_change(detail_stock, period='1y')
+            submitted = st.form_submit_button("✅ เพิ่มหุ้น")
             
-            if details:
-                # Create tabs for different sections
-                detail_tab1, detail_tab2, detail_tab3, detail_tab4, detail_tab5 = st.tabs([
-                    "📋 พื้นฐาน", 
-                    "💹 มูลค่า", 
-                    "📊 การเงิน", 
-                    "📈 กราฟ",
-                    "🎯 การวิเคราะห์"
-                ])
+            if submitted and new_symbol:
+                if portfolio_mgr.add_stock(
+                    new_symbol, 
+                    new_shares, 
+                    new_price, 
+                    new_date.strftime("%Y-%m-%d"),
+                    new_notes
+                ):
+                    st.success(f"✅ เพิ่มหุ้น {new_symbol} สำเร็จ!")
+                    st.rerun()
+                else:
+                    st.error("❌ เกิดข้อผิดพลาดในการเพิ่มหุ้น")
+        
+        st.divider()
+        
+        st.subheader("🗑️ ลบหุ้น")
+        portfolio_stocks = portfolio_mgr.get_symbols()
+        
+        if portfolio_stocks:
+            with st.form("remove_stock_form"):
+                remove_symbol = st.selectbox("เลือกหุ้นที่ต้องการลบ", portfolio_stocks, key="remove_symbol")
+                remove_submitted = st.form_submit_button("🗑️ ลบหุ้น", type="secondary")
                 
-                # Tab 1: Basic Information
-                with detail_tab1:
-                    st.subheader("📋 ข้อมูลพื้นฐาน")
-                    widget.display_stock_fundamentals(detail_stock)
+                if remove_submitted:
+                    if portfolio_mgr.remove_stock(remove_symbol):
+                        st.success(f"✅ ลบหุ้น {remove_symbol} สำเร็จ!")
+                        st.rerun()
+                    else:
+                        st.error("❌ เกิดข้อผิดพลาดในการลบหุ้น")
+        else:
+            st.info("📭 ยังไม่มีหุ้นในพอร์ต")
+    
+    with col_right:
+        st.subheader("📋 หุ้นในพอร์ตปัจจุบัน")
+        
+        portfolio = portfolio_mgr.get_portfolio()
+        
+        if portfolio:
+            for stock in portfolio:
+                with st.expander(f"📊 {stock['symbol']} - {stock['shares']:.2f} หุ้น @ ${stock['buy_price']:.2f}"):
+                    st.write(f"**วันที่ซื้อ:** {stock.get('buy_date', 'N/A')}")
+                    st.write(f"**ต้นทุนรวม:** ${stock['shares'] * stock['buy_price']:,.2f}")
+                    st.write(f"**หมายเหตุ:** {stock.get('notes', '-')}")
+                    st.write(f"**อัพเดทล่าสุด:** {stock.get('last_updated', 'N/A')}")
                     
                     st.divider()
                     
-                    st.subheader("🏢 จำแนกธุรกิจ")
-                    col1, col2 = st.columns(2)
-                    
-                    with col1:
-                        st.info(f"**ส่วนชั้น (Sector)**: {details.get('sector', 'ไม่ทราบ')}")
-                        st.warning(f"**อุตสาหกรรม (Industry)**: {details.get('industry', 'ไม่ทราบ')}")
-                    
-                    with col2:
-                        market_cap = details.get('market_cap', 'ไม่ทราบ')
-                        market_category = provider.get_market_category(market_cap)
-                        st.success(f"**หมวดหมู่ตลาด**: {market_category}")
-                        st.metric("Market Cap", provider.format_market_cap(market_cap))
-                    
-                    st.divider()
-                    
-                    st.subheader("📝 รายละเอียดธุรกิจ")
-                    st.write(details.get('description', 'ไม่มีข้อมูล'))
+                    # Edit form
+                    with st.form(f"edit_form_{stock['symbol']}"):
+                        st.markdown("**แก้ไขข้อมูล**")
+                        edit_shares = st.number_input("จำนวนหุ้น", min_value=0.01, value=stock['shares'], step=0.01, key=f"edit_shares_{stock['symbol']}")
+                        edit_price = st.number_input("ราคาซื้อ ($)", min_value=0.01, value=stock['buy_price'], step=0.01, key=f"edit_price_{stock['symbol']}")
+                        edit_notes = st.text_area("หมายเหตุ", value=stock.get('notes', ''), key=f"edit_notes_{stock['symbol']}")
+                        
+                        edit_submitted = st.form_submit_button("💾 บันทึกการแก้ไข")
+                        
+                        if edit_submitted:
+                            if portfolio_mgr.update_stock(stock['symbol'], edit_shares, edit_price, edit_notes):
+                                st.success(f"✅ อัพเดทข้อมูล {stock['symbol']} สำเร็จ!")
+                                st.rerun()
+                            else:
+                                st.error("❌ เกิดข้อผิดพลาดในการอัพเดท")
+            
+            st.divider()
+            
+            # Export/Import portfolio
+            import pandas as pd
+            col_export, col_clear = st.columns(2)
+            
+            with col_export:
+                st.download_button(
+                    label="📥 Export Portfolio (JSON)",
+                    data=pd.DataFrame(portfolio).to_json(orient='records', indent=2),
+                    file_name=f"portfolio_{datetime.now().strftime('%Y%m%d')}.json",
+                    mime="application/json"
+                )
+            
+            with col_clear:
+                if st.button("🗑️ ล้างพอร์ตทั้งหมด", type="secondary"):
+                    if st.button("⚠️ ยืนยันการล้างข้อมูล", type="primary"):
+                        if portfolio_mgr.clear_portfolio():
+                            st.success("✅ ล้างพอร์ตสำเร็จ!")
+                            st.rerun()
+        else:
+            st.info("📭 ยังไม่มีหุ้นในพอร์ต กรุณาเพิ่มหุ้นด้านซ้าย")
+
+# PAGE 3: Stock Analysis (Original Content)
+elif st.session_state.current_page == "วิเคราะห์หุ้น":
+    st.header("📈 วิเคราะห์หุ้น")
+    
+    # Display summary info if stocks selected
+    if selected_stocks:
+        col_summary1, col_summary2, col_summary3 = st.columns(3)
+        with col_summary1:
+            st.metric("📊 จำนวนหุ้นที่วิเคราะห์", len(selected_stocks))
+        with col_summary2:
+            st.metric("📅 ช่วงเวลา", period)
+        with col_summary3:
+            st.metric("🎯 ความมั่นใจขั้นต่ำ", f"{min_confidence}%")
+        
+        st.divider()
+        
+        # Tabs for stock analysis (5 tabs)
+        tab0, tab1, tab2, tab3, tab4 = st.tabs(
+            ["📈 การวิเคราะห์ทั้งหมด", "💚 สัญญาณซื้อ", "📉 สัญญาณขาย", "🔥 หุ้นฮอต", "📊 รายละเอียดหุ้น"]
+        )
+        
+        # Tab 0: Analysis
+        with tab0:
+            st.header("📈 วิเคราะห์เทคนิค")
+            
+            # Quick filters
+            col_filter1, col_filter2 = st.columns(2)
+            with col_filter1:
+                show_chart = st.checkbox("� แสดงกราฟ", value=True)
+            with col_filter2:
+                sort_by = st.selectbox(
+                    "เรียงลำดับ",
+                    ["ตามลำดับที่เลือก", "ตามราคา (สูง→ต่ำ)", "ตามราคา (ต่ำ→สูง)", "ตาม RSI (สูง→ต่ำ)"],
+                    key="sort_analysis"
+                )
+            
+            st.divider()
+            
+            cols = st.columns(len(selected_stocks) if len(selected_stocks) <= 3 else 3)
+            
+            for idx, symbol in enumerate(selected_stocks):
+                with cols[idx % len(cols)]:
+                    with st.spinner(f"🔄 กำลังวิเคราะห์ {symbol}..."):
+                        result = app.analyze_single_stock(symbol, period=period)
+                        
+
+                        if result:
+                            technical = result['technical']
+                            signals = result['signals']
+                            
+                            # Create metric cards with better styling and visual indicators
+                            st.markdown(f"### {symbol}")
+                            
+                            col_price, col_rsi, col_signal = st.columns(3)
+                            
+                            with col_price:
+                                st.metric(
+                                    "💰 ราคา",
+                                    f"${technical['latest_price']:.2f}",
+                                    delta=None
+                                )
+                            
+                            with col_rsi:
+                                rsi_value = technical['rsi']
+                                rsi_status = "〽️ ขายมาก" if rsi_value > 70 else \
+                                            "✅ ซื้อมาก" if rsi_value < 30 else \
+                                            "🆗 ปกติ"
+                                st.metric("〽️ RSI", f"{rsi_value:.1f}", delta=rsi_status)
+                            
+                            with col_signal:
+                                if signals['buy']:
+                                    signal_display = '✅ ซื้อ'
+                                elif signals['sell']:
+                                    signal_display = '⛔ ขาย'
+                                else:
+                                    signal_display = '⏸️ คงตำแหน่ง'
+                                st.metric("📈 สัญญาณ", signal_display, delta=f"{signals['confidence']:.1%}")
+                            
+                            st.divider()
+                            
+                            # Price levels in expandable section
+                            with st.expander("📋 ตัวชี้วัดเพิ่มเติม"):
+                                col_left, col_right = st.columns(2)
+                                with col_left:
+                                    st.write("**📈 Moving Averages:**")
+                                    st.write(f"  📍 SMA20: ${technical['sma_20']:.2f}")
+                                    st.write(f"  📍 SMA50: ${technical['sma_50']:.2f}")
+                                    st.write(f"  📍 SMA200: ${technical['sma_200']:.2f}")
+                                
+                                with col_right:
+                                    st.write("**⚡ Volatility & Momentum:**")
+                                    st.write(f"  📈 ATR: {technical['atr']:.4f}")
+                                    st.write(f"  📊 MACD: {technical['macd']:.6f}")
+                                
+                                # Reasons
+                                st.write("**🎯 เหตุผลสัญญาณ:**")
+                                for i, reason in enumerate(signals['reasons'][:3], 1):
+                                    st.write(f"  {i}. {reason}")
+                            
+                            st.divider()
+                        else:
+                            st.error(f"❌ ไม่สามารถดึงข้อมูล {symbol} - อาจเป็นหุ้นที่ delisted หรือสัญลักษณ์ไม่ถูกต้อง")
+        
+        # Tab 2: Buy Signals
+        with tab1:
+            st.header("💚 โอกาสในการซื้อ")
+            
+            # Filter options
+            col_filter_buy1, col_filter_buy2 = st.columns(2)
+            with col_filter_buy1:
+                min_confidence_buy = st.slider(
+                    "ความมั่นใจขั้นต่ำ",
+                    min_value=30,
+                    max_value=100,
+                    value=min_confidence,
+                    step=5,
+                    key="buy_confidence_filter"
+                )
+            with col_filter_buy2:
+                max_price_buy = st.number_input(
+                    "ราคาสูงสุด ($)",
+                    min_value=0.0,
+                    value=1000.0,
+                    step=10.0,
+                    key="buy_price_filter"
+                )
+            
+            st.divider()
+            
+            buy_opps = app.find_buy_opportunities(selected_stocks, min_confidence_buy / 100)
+            
+            if buy_opps:
+                # Display as cards
+                num_cols = min(len(buy_opps), 3)
+                cols = st.columns(num_cols)
                 
-                # Tab 2: Valuation
-                with detail_tab2:
-                    widget.display_valuation_analysis(detail_stock)
-                    
-                    st.divider()
-                    
-                    st.subheader("💰 ราคา & ผลงาน")
-                    
-                    col1, col2, col3, col4 = st.columns(4)
-                    
-                    with col1:
-                        st.metric(
-                            "ราคาปัจจุบัน",
-                            f"${details.get('current_price', 'N/A')}",
-                            "LIVE"
-                        )
-                    
-                    with col2:
-                        st.metric(
-                            "ราคาปิดก่อนหน้า",
-                            f"${details.get('previous_close', 'N/A')}"
-                        )
-                    
-                    with col3:
-                        if price_change:
-                            st.metric(
-                                "เปลี่ยนแปลง 1 ปี",
-                                f"{price_change['change_percent']:.2f}%"
-                            )
-                    
-                    with col4:
-                        st.metric(
-                            "ปริมาณหุ้น (เฉลี่ย)",
-                            f"{int(details.get('avg_volume', 0)):,.0f}"
-                        )
-                    
-                    st.divider()
-                    
-                    st.subheader("📈 ช่วง 52 สัปดาห์")
-                    
-                    col1, col2 = st.columns(2)
-                    
-                    with col1:
-                        st.metric(
-                            "ราคาสูงสุด",
-                            f"${details.get('fifty_two_week_high', 'N/A')}"
-                        )
-                    
-                    with col2:
-                        st.metric(
-                            "ราคาต่ำสุด",
-                            f"${details.get('fifty_two_week_low', 'N/A')}"
-                        )
+                for idx, opp in enumerate(buy_opps):
+                    with cols[idx % num_cols]:
+                        with st.container(border=True):
+                            # Header with signal emoji
+                            st.markdown(f"## 💸 {opp['symbol']}")
+                            
+                            # Confidence bar
+                            confidence_pct = opp['confidence']
+                            st.progress(confidence_pct, text=f"ความมั่นใจ: {confidence_pct:.1%}")
+                            
+                            # Key metrics in columns
+                            metric_col1, metric_col2 = st.columns(2)
+                            with metric_col1:
+                                st.metric("ราคาเข้า", f"${opp.get('entry_price', opp.get('latest_price', 0)):.2f}")
+                            with metric_col2:
+                                st.metric("Target", f"${opp.get('target_price', 0):.2f}")
+                            
+                            # Stop Loss
+                            st.metric("Stop Loss", f"${opp.get('stop_loss', 0):.2f}")
+                            
+                            # Reason with icon
+                            reason_text = ", ".join(opp.get('reasons', []))
+                            st.info(f"📌 **เหตุผล:** {reason_text}")
+            else:
+                st.info("ℹ️ ยังไม่มีสัญญาณซื้อในขณะนี้")
+        
+        # Tab 3: Sell Signals
+        with tab2:
+            st.header("📉 โอกาสในการขาย")
+            
+            # Filter options
+            col_filter_sell1, col_filter_sell2 = st.columns(2)
+            with col_filter_sell1:
+                min_confidence_sell = st.slider(
+                    "ความมั่นใจขั้นต่ำ",
+                    min_value=30,
+                    max_value=100,
+                    value=min_confidence,
+                    step=5,
+                    key="sell_confidence_filter"
+                )
+            with col_filter_sell2:
+                max_loss_sell = st.number_input(
+                    "ขาดทุนสูงสุด (%)",
+                    min_value=0.0,
+                    value=100.0,
+                    step=5.0,
+                    key="sell_loss_filter"
+                )
+            
+            st.divider()
+            
+            sell_opps = app.find_sell_opportunities(selected_stocks, min_confidence_sell / 100)
+            
+            if sell_opps:
+                # Display as cards
+                num_cols = min(len(sell_opps), 3)
+                cols = st.columns(num_cols)
                 
-                # Tab 3: Financial Health
-                with detail_tab3:
-                    widget.display_financial_health(detail_stock)
+                for idx, opp in enumerate(sell_opps):
+                    with cols[idx % num_cols]:
+                        with st.container(border=True):
+                            # Header with signal emoji
+                            st.markdown(f"## 🔴 {opp['symbol']}")
+                            
+                            # Confidence bar
+                            confidence_pct = opp['confidence']
+                            st.progress(confidence_pct, text=f"ความมั่นใจ: {confidence_pct:.1%}")
+                            
+                            # Key metrics in columns
+                            metric_col1, metric_col2 = st.columns(2)
+                            with metric_col1:
+                                st.metric("ราคาปัจจุบัน", f"${opp.get('latest_price', 0):.2f}")
+                            with metric_col2:
+                                st.metric("ราคาออก", f"${opp.get('exit_price', 0):.2f}")
+                            
+                            # Target and Stop Loss
+                            metric_col3, metric_col4 = st.columns(2)
+                            with metric_col3:
+                                st.metric("Target ขาย", f"${opp.get('target_price', 0):.2f}")
+                            with metric_col4:
+                                st.metric("Stop Loss", f"${opp.get('stop_loss', 0):.2f}")
+                            
+                            # Reason with warning style
+                            reason_text = ", ".join(opp.get('reasons', []))
+                            st.warning(f"📌 **เหตุผล:** {reason_text}")
+            else:
+                st.info("ℹ️ ยังไม่มีสัญญาณขายในขณะนี้")
+        
+        # Tab 4: Hot Stocks
+        with tab3:
+            st.header("🔥 หุ้นฮอต")
+            st.write("สรุปภาพรวมสัญญาณการซื้อขาย")
+            
+            try:
+                hot = app.get_hot_stocks(selected_stocks)
                 
-                # Tab 4: Charts
-                with detail_tab4:
-                    if historical_data is not None and not historical_data.empty:
-                        st.subheader("📈 กราฟราคาประวัติศาสตร์ (1 ปี)")
-                        
-                        # Create candlestick chart
-                        fig = go.Figure(data=[go.Candlestick(
-                            x=historical_data.index,
-                            open=historical_data['Open'],
-                            high=historical_data['High'],
-                            low=historical_data['Low'],
-                            close=historical_data['Close']
-                        )])
-                        
-                        fig.update_layout(
-                            title=f"กราฟราคา {detail_stock} (1 ปี)",
-                            yaxis_title="ราคา (USD)",
-                            xaxis_title="วันที่",
-                            template="plotly_dark",
-                            height=500,
-                            xaxis_rangeslider_visible=False
-                        )
-                        
-                        st.plotly_chart(fig, use_container_width=True)
-                        
-                        # Volume chart
-                        fig_volume = go.Figure(data=[go.Bar(
-                            x=historical_data.index,
-                            y=historical_data['Volume'],
-                            name='ปริมาณ',
-                            marker=dict(color='rgba(0, 150, 200, 0.7)')
-                        )])
-                        
-                        fig_volume.update_layout(
-                            title=f"ปริมาณการซื้อขาย {detail_stock}",
-                            yaxis_title="ปริมาณหุ้น",
-                            xaxis_title="วันที่",
-                            template="plotly_dark",
-                            height=300,
-                            showlegend=False
-                        )
-                        
-                        st.plotly_chart(fig_volume, use_container_width=True)
+                # แสดงเฉพาะสถิติสรุป
+                col1, col2, col3, col4 = st.columns(4)
+                
+                with col1:
+                    st.metric("💸 ซื้อแรง", len(hot.get('strong_buys', [])))
+                    if hot.get('strong_buys'):
+                        st.caption(", ".join([s['symbol'] for s in hot['strong_buys']]))
+                
+                with col2:
+                    st.metric("� ซื้อ", len(hot.get('buys', [])))
+                    if hot.get('buys'):
+                        st.caption(", ".join([s['symbol'] for s in hot['buys']]))
+                
+                with col3:
+                    st.metric("📉 ขาย", len(hot.get('sells', [])))
+                    if hot.get('sells'):
+                        st.caption(", ".join([s['symbol'] for s in hot['sells']]))
+                
+                with col4:
+                    st.metric("🔴 ขายแรง", len(hot.get('strong_sells', [])))
+                    if hot.get('strong_sells'):
+                        st.caption(", ".join([s['symbol'] for s in hot['strong_sells']]))
+                
+                st.divider()
+                
+                st.info("💡 **คำแนะนำ:** ดูรายละเอียดสัญญาณซื้อที่แถบ '💚 สัญญาณซื้อ' และสัญญาณขายที่แถบ '📉 สัญญาณขาย'")
+                
+            except Exception as e:
+                st.error(f"⚠️ เกิดข้อผิดพลาด: {str(e)}")
+        
+        # Tab 5: Stock Details
+        with tab4:
+            st.header("📊 รายละเอียดหุ้นแบบละเอียด")
+            
+            # Select stock for details
+            detail_stock = st.selectbox(
+                "เลือกหุ้นเพื่อดูรายละเอียด",
+                selected_stocks,
+                key="detail_stock_select"
+            )
+            
+            if detail_stock:
+                provider = StockDetailsProvider()
+                widget = StockInfoWidget()
+                
+                # Get stock details
+                with st.spinner(f"🔄 กำลังดึงข้อมูล {detail_stock}..."):
+                    details = provider.get_enhanced_stock_info(detail_stock)
+                    historical_data = provider.get_historical_data(detail_stock, period='1y')
+                    price_change = provider.calculate_price_change(detail_stock, period='1y')
+                
+                if details:
+                    # Create tabs for different sections
+                    detail_tab1, detail_tab2, detail_tab3, detail_tab4, detail_tab5 = st.tabs([
+                        "📋 พื้นฐาน", 
+                        "💹 มูลค่า", 
+                        "📊 การเงิน", 
+                        "📈 กราฟ",
+                        "🎯 การวิเคราะห์"
+                    ])
+                    
+                    # Tab 1: Basic Information
+                    with detail_tab1:
+                        st.subheader("📋 ข้อมูลพื้นฐาน")
+                        widget.display_stock_fundamentals(detail_stock)
                         
                         st.divider()
                         
-                        # Moving Averages
-                        historical_data['SMA20'] = historical_data['Close'].rolling(window=20).mean()
-                        historical_data['SMA50'] = historical_data['Close'].rolling(window=50).mean()
-                        historical_data['SMA200'] = historical_data['Close'].rolling(window=200).mean()
+                        st.subheader("🏢 จำแนกธุรกิจ")
+                        col1, col2 = st.columns(2)
                         
-                        fig_ma = go.Figure()
+                        with col1:
+                            st.info(f"**ส่วนชั้น (Sector)**: {details.get('sector', 'ไม่ทราบ')}")
+                            st.warning(f"**อุตสาหกรรม (Industry)**: {details.get('industry', 'ไม่ทราบ')}")
                         
-                        fig_ma.add_trace(go.Scatter(
-                            x=historical_data.index,
-                            y=historical_data['Close'],
-                            name='ราคาปิด',
-                            line=dict(color='white', width=2)
-                        ))
+                        with col2:
+                            market_cap = details.get('market_cap', 'ไม่ทราบ')
+                            market_category = provider.get_market_category(market_cap)
+                            st.success(f"**หมวดหมู่ตลาด**: {market_category}")
+                            st.metric("Market Cap", provider.format_market_cap(market_cap))
                         
-                        fig_ma.add_trace(go.Scatter(
-                            x=historical_data.index,
-                            y=historical_data['SMA20'],
-                            name='SMA20',
-                            line=dict(color='cyan', width=1, dash='dash')
-                        ))
+                        st.divider()
                         
-                        fig_ma.add_trace(go.Scatter(
-                            x=historical_data.index,
-                            y=historical_data['SMA50'],
-                            name='SMA50',
-                            line=dict(color='yellow', width=1, dash='dash')
-                        ))
-                        
-                        fig_ma.add_trace(go.Scatter(
-                            x=historical_data.index,
-                            y=historical_data['SMA200'],
-                            name='SMA200',
-                            line=dict(color='red', width=1, dash='dash')
-                        ))
-                        
-                        fig_ma.update_layout(
-                            title=f"ค่าเฉลี่ยเคลื่อนที่ {detail_stock}",
-                            yaxis_title="ราคา (USD)",
-                            xaxis_title="วันที่",
-                            template="plotly_dark",
-                            height=400,
-                            hovermode='x unified'
-                        )
-                        
-                        st.plotly_chart(fig_ma, use_container_width=True)
-                    else:
-                        st.warning("ไม่สามารถดึงข้อมูลราคาประวัติศาสตร์ได้")
-                
-                # Tab 5: Analysis & Recommendation
-                with detail_tab5:
-                    widget.display_valuation_recommendation(detail_stock)
+                        st.subheader("📝 รายละเอียดธุรกิจ")
+                        st.write(details.get('description', 'ไม่มีข้อมูล'))
                     
-                    st.divider()
-                    
-                    st.subheader("📚 ความหมายของตัวชี้วัด")
-                    
-                    with st.expander("💡 P/E Ratio คืออะไร?"):
-                        st.write("""
-                        **P/E Ratio = ราคา / กำไรต่อหุ้น**
+                    # Tab 2: Valuation
+                    with detail_tab2:
+                        widget.display_valuation_analysis(detail_stock)
                         
-                        - แสดงว่านักลงทุนยินดีจ่ายกี่เท่าของกำไรต่อหุ้น
-                        - ยิ่งต่ำยิ่งดี (ราคาถูก) แต่ต้องดู growth ด้วย
-                        - ใช้เปรียบเทียบหุ้นในอุตสาหกรรมเดียวกัน
-                        """)
-                    
-                    with st.expander("💡 ROE คืออะไร?"):
-                        st.write("""
-                        **ROE = กำไรสุทธิ / ส่วนของผู้ถือหุ้น**
+                        st.divider()
                         
-                        - แสดงว่าบริษัทใช้เงินของผู้ถือหุ้นได้มีประสิทธิภาพเพียงใด
-                        - ยิ่งสูงยิ่งดี (> 15% ถือว่าดี)
-                        - ใช้ดูความสามารถในการหารายได้
-                        """)
-                    
-                    with st.expander("💡 Debt-to-Equity คืออะไร?"):
-                        st.write("""
-                        **Debt-to-Equity = หนี้สิน / ส่วนของผู้ถือหุ้น**
+                        st.subheader("💰 ราคา & ผลงาน")
                         
-                        - แสดงสัดส่วนหนี้สินเมื่อเทียบกับเงินทุน
-                        - ยิ่งต่ำยิ่งดี (< 1.0 ถือว่าปลอดภัย)
-                        - บริษัทที่มีหนี้สินสูง มีความเสี่ยง
-                        """)
-                    
-                    with st.expander("💡 Dividend Yield คืออะไร?"):
-                        st.write("""
-                        **Dividend Yield = เงินปันผลประจำปี / ราคาหุ้น**
+                        col1, col2, col3, col4 = st.columns(4)
                         
-                        - แสดงผลตอบแทนจากเงินปันผล
-                        - ยิ่งสูงยิ่งดี (> 3% ถือว่าดี)
-                        - แต่ต้องตรวจสอบว่าบริษัทสามารถจ่ายอย่างต่อเนื่องได้
-                        """)
-
+                        with col1:
+                            st.metric(
+                                "ราคาปัจจุบัน",
+                                f"${details.get('current_price', 'N/A')}",
+                                "LIVE"
+                            )
+                        
+                        with col2:
+                            st.metric(
+                                "ราคาปิดก่อนหน้า",
+                                f"${details.get('previous_close', 'N/A')}"
+                            )
+                        
+                        with col3:
+                            if price_change:
+                                st.metric(
+                                    "เปลี่ยนแปลง 1 ปี",
+                                    f"{price_change['change_percent']:.2f}%"
+                                )
+                        
+                        with col4:
+                            avg_vol = details.get('avg_volume', 0)
+                            if isinstance(avg_vol, (int, float)) and avg_vol != 0:
+                                avg_vol_display = f"{int(avg_vol):,.0f}"
+                            else:
+                                avg_vol_display = "N/A"
+                            st.metric(
+                                "ปริมาณหุ้น (เฉลี่ย)",
+                                avg_vol_display
+                            )
+                        
+                        st.divider()
+                        
+                        st.subheader("📈 ช่วง 52 สัปดาห์")
+                        
+                        col1, col2 = st.columns(2)
+                        
+                        with col1:
+                            st.metric(
+                                "ราคาสูงสุด",
+                                f"${details.get('fifty_two_week_high', 'N/A')}"
+                            )
+                        
+                        with col2:
+                            st.metric(
+                                "ราคาต่ำสุด",
+                                f"${details.get('fifty_two_week_low', 'N/A')}"
+                            )
+                    
+                    # Tab 3: Financial Health
+                    with detail_tab3:
+                        widget.display_financial_health(detail_stock)
+                    
+                    # Tab 4: Charts
+                    with detail_tab4:
+                        if historical_data is not None and not historical_data.empty:
+                            st.subheader("📈 กราฟราคาประวัติศาสตร์ (1 ปี)")
+                            
+                            # Create candlestick chart
+                            fig = go.Figure(data=[go.Candlestick(
+                                x=historical_data.index,
+                                open=historical_data['Open'],
+                                high=historical_data['High'],
+                                low=historical_data['Low'],
+                                close=historical_data['Close']
+                            )])
+                            
+                            fig.update_layout(
+                                title=f"กราฟราคา {detail_stock} (1 ปี)",
+                                yaxis_title="ราคา (USD)",
+                                xaxis_title="วันที่",
+                                template="plotly_dark",
+                                height=500,
+                                xaxis_rangeslider_visible=False
+                            )
+                            
+                            st.plotly_chart(fig, use_container_width=True)
+                            
+                            # Volume chart
+                            fig_volume = go.Figure(data=[go.Bar(
+                                x=historical_data.index,
+                                y=historical_data['Volume'],
+                                name='ปริมาณ',
+                                marker=dict(color='rgba(0, 150, 200, 0.7)')
+                            )])
+                            
+                            fig_volume.update_layout(
+                                title=f"ปริมาณการซื้อขาย {detail_stock}",
+                                yaxis_title="ปริมาณหุ้น",
+                                xaxis_title="วันที่",
+                                template="plotly_dark",
+                                height=300,
+                                showlegend=False
+                            )
+                            
+                            st.plotly_chart(fig_volume, use_container_width=True)
+                            
+                            st.divider()
+                            
+                            # Moving Averages
+                            historical_data['SMA20'] = historical_data['Close'].rolling(window=20).mean()
+                            historical_data['SMA50'] = historical_data['Close'].rolling(window=50).mean()
+                            historical_data['SMA200'] = historical_data['Close'].rolling(window=200).mean()
+                            
+                            fig_ma = go.Figure()
+                            
+                            fig_ma.add_trace(go.Scatter(
+                                x=historical_data.index,
+                                y=historical_data['Close'],
+                                name='ราคาปิด',
+                                line=dict(color='white', width=2)
+                            ))
+                            
+                            fig_ma.add_trace(go.Scatter(
+                                x=historical_data.index,
+                                y=historical_data['SMA20'],
+                                name='SMA20',
+                                line=dict(color='cyan', width=1, dash='dash')
+                            ))
+                            
+                            fig_ma.add_trace(go.Scatter(
+                                x=historical_data.index,
+                                y=historical_data['SMA50'],
+                                name='SMA50',
+                                line=dict(color='yellow', width=1, dash='dash')
+                            ))
+                            
+                            fig_ma.add_trace(go.Scatter(
+                                x=historical_data.index,
+                                y=historical_data['SMA200'],
+                                name='SMA200',
+                                line=dict(color='red', width=1, dash='dash')
+                            ))
+                            
+                            fig_ma.update_layout(
+                                title=f"ค่าเฉลี่ยเคลื่อนที่ {detail_stock}",
+                                yaxis_title="ราคา (USD)",
+                                xaxis_title="วันที่",
+                                template="plotly_dark",
+                                height=400,
+                                hovermode='x unified'
+                            )
+                            
+                            st.plotly_chart(fig_ma, use_container_width=True)
+                        else:
+                            st.warning("ไม่สามารถดึงข้อมูลราคาประวัติศาสตร์ได้")
+                    
+                    # Tab 5: Analysis & Recommendation
+                    with detail_tab5:
+                        widget.display_valuation_recommendation(detail_stock)
+                        
+                        st.divider()
+                        
+                        st.subheader("📚 ความหมายของตัวชี้วัด")
+                        
+                        with st.expander("💡 P/E Ratio คืออะไร?"):
+                            st.write("""
+                            **P/E Ratio = ราคา / กำไรต่อหุ้น**
+                            
+                            - แสดงว่านักลงทุนยินดีจ่ายกี่เท่าของกำไรต่อหุ้น
+                            - ยิ่งต่ำยิ่งดี (ราคาถูก) แต่ต้องดู growth ด้วย
+                            - ใช้เปรียบเทียบหุ้นในอุตสาหกรรมเดียวกัน
+                            """)
+                        
+                        with st.expander("💡 ROE คืออะไร?"):
+                            st.write("""
+                            **ROE = กำไรสุทธิ / ส่วนของผู้ถือหุ้น**
+                            
+                            - แสดงว่าบริษัทใช้เงินของผู้ถือหุ้นได้มีประสิทธิภาพเพียงใด
+                            - ยิ่งสูงยิ่งดี (> 15% ถือว่าดี)
+                            - ใช้ดูความสามารถในการหารายได้
+                            """)
+                        
+                        with st.expander("💡 Debt-to-Equity คืออะไร?"):
+                            st.write("""
+                            **Debt-to-Equity = หนี้สิน / ส่วนของผู้ถือหุ้น**
+                            
+                            - แสดงสัดส่วนหนี้สินเมื่อเทียบกับเงินทุน
+                            - ยิ่งต่ำยิ่งดี (< 1.0 ถือว่าปลอดภัย)
+                            - บริษัทที่มีหนี้สินสูง มีความเสี่ยง
+                            """)
+                        
+                        with st.expander("💡 Dividend Yield คืออะไร?"):
+                            st.write("""
+                            **Dividend Yield = เงินปันผลประจำปี / ราคาหุ้น**
+                            
+                            - แสดงผลตอบแทนจากเงินปันผล
+                            - ยิ่งสูงยิ่งดี (> 3% ถือว่าดี)
+                            - แต่ต้องตรวจสอบว่าบริษัทสามารถจ่ายอย่างต่อเนื่องได้
+                            """)
+        
+        # Display message if no stocks selected
+    else:
+        st.info("👈 กรุณาเลือกหุ้นจากเมนูด้านซ้าย หรือเลือกเมนู Dashboard/Portfolio")
+    
+# Display message if not in Stock Analysis page
 else:
-    st.warning("กรุณาเลือกหุ้นอย่างน้อย 1 ตัวเพื่อวิเคราะห์")
+    pass  # Dashboard and Portfolio pages are already handled above
 
 # Footer
 st.divider()
 st.markdown("""
 ---
-**ข้อปฏิเสธ**: นี่คือเพื่อวัตถุประสงค์ทางการศึกษาเท่านั้น ไม่ใช่คำแนะนำทางการเงิน
+**ข้อปฏิเสธ**: นี่คือเพื่อวัตถุประสงค์ทางการศึกษาเท่านั้น ไม่ใช่คำแนะนำทางการเงิน  
 อัปเดตล่าสุด: """ + datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
 
 

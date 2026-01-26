@@ -160,7 +160,10 @@ class StockAnalyzerApp:
                     'signal': 'SELL',
                     'confidence': signals['confidence'],
                     'reasons': signals['reasons'],
-                    'exit_price': result['entry_exit']['entry_price']
+                    'latest_price': result['technical']['latest_price'],
+                    'exit_price': result['entry_exit']['entry_price'],
+                    'target_price': result['entry_exit']['target_price'],
+                    'stop_loss': result['entry_exit']['stop_loss']
                 })
         
         # เรียงลำดับตามความมั่นใจ

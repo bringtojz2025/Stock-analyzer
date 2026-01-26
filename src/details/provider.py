@@ -116,24 +116,51 @@ class StockDetailsProvider:
             ticker = yf.Ticker(symbol)
             info = ticker.info
             
+            # Get current price with fallback
+            current_price = info.get('currentPrice')
+            if current_price is None or current_price == 0:
+                current_price = info.get('regularMarketPrice')
+            if current_price is None or current_price == 0:
+                current_price = info.get('previousClose')
+            
+            # Get previous close
+            previous_close = info.get('previousClose')
+            if previous_close is None or previous_close == 0:
+                previous_close = info.get('regularMarketPreviousClose')
+            
+            # Get PE ratio
+            pe_ratio = info.get('trailingPE')
+            if pe_ratio is None:
+                pe_ratio = info.get('forwardPE')
+            
             return {
                 'symbol': symbol,
-                'name': info.get('longName', 'ไม่ทราบชื่อ'),
-                'current_price': info.get('currentPrice', 'N/A'),
-                'previous_close': info.get('previousClose', 'N/A'),
+                'name': info.get('longName', info.get('shortName', 'ไม่ทราบชื่อ')),
+                'current_price': current_price if current_price else 'N/A',
+                'previous_close': previous_close if previous_close else 'N/A',
                 'market_cap': info.get('marketCap', 'ไม่ทราบ'),
-                'pe_ratio': info.get('trailingPE', 'N/A'),
-                'forward_pe': info.get('forwardPE', 'N/A'),
-                'dividend_yield': info.get('dividendYield', 'N/A'),
-                'fifty_two_week_high': info.get('fiftyTwoWeekHigh', 'N/A'),
-                'fifty_two_week_low': info.get('fiftyTwoWeekLow', 'N/A'),
-                'avg_volume': info.get('averageVolume', 'N/A'),
+                'pe_ratio': pe_ratio,
+                'forward_pe': info.get('forwardPE'),
+                'peg_ratio': info.get('pegRatio'),
+                'price_to_book': info.get('priceToBook'),
+                'price_to_sales': info.get('priceToSalesTrailing12Months'),
+                'dividend_yield': info.get('dividendYield'),
+                'fifty_two_week_high': info.get('fiftyTwoWeekHigh'),
+                'fifty_two_week_low': info.get('fiftyTwoWeekLow'),
+                'avg_volume': info.get('averageVolume', info.get('volume')),
                 'sector': info.get('sector', 'ไม่ทราบ'),
                 'industry': info.get('industry', 'ไม่ทราบ'),
                 'website': info.get('website', 'ไม่ทราบ'),
                 'description': info.get('longBusinessSummary', 'ไม่มีรายละเอียด'),
                 'country': info.get('country', 'ไม่ทราบ'),
                 'employees': info.get('fullTimeEmployees', 'ไม่ทราบ'),
+                # Financial health metrics
+                'roe': info.get('returnOnEquity'),
+                'roa': info.get('returnOnAssets'),
+                'profit_margin': info.get('profitMargins'),
+                'debt_to_equity': info.get('debtToEquity'),
+                'current_ratio': info.get('currentRatio'),
+                'beta': info.get('beta'),
             }
         except Exception as e:
             logger.error(f"Error getting info for {symbol}: {str(e)}")
@@ -205,9 +232,9 @@ class StockDetailsProvider:
             elif market_cap < 10e9:   # < $10B
                 return '🔷 กลาง (Mid-cap) < $10B'
             elif market_cap < 100e9:  # < $100B
-                return '🟦 ใหญ่ (Large-cap) < $100B'
+                return '🏪 ใหญ่ (Large-cap) < $100B'
             else:
-                return '🟩 ยิ่งใหญ่ (Mega-cap) > $100B'
+                return '🏭 ยิ่งใหญ่ (Mega-cap) > $100B'
         except:
             return 'ไม่ทราบ'
     
