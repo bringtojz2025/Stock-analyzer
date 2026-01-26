@@ -100,7 +100,7 @@ with st.sidebar:
         # Mode selection with better styling
         mode = st.radio(
             "เลือกโหมดการใช้งาน",
-            ["📝 ป้อนชื่อหุ้น", "🔍 ค้นหาจากตลาด", "💎 หุ้นจิ๋วที่น่าสนใจ", "💰 หุ้นปันผล"],
+            ["📝 ป้อนชื่อหุ้น", "💼 หุ้นใน Portfolio","🔍 ค้นหาจากตลาด", "💎 หุ้นจิ๋วที่น่าสนใจ", "💰 หุ้นปันผล"],
             index=0,
             help="เลือกวิธีการค้นหาหุ้นที่ต้องการวิเคราะห์"
         )
@@ -203,7 +203,145 @@ with st.sidebar:
             if selected_stocks:
                 st.info(f"✅ จำนวนหุ้นที่เลือก: {len(selected_stocks)} ตัว")
     
-    elif mode == "🔍 ค้นหาจากตลาด":
+    elif mode == "💼 หุ้นใน Portfolio":
+        st.write("📂 **เลือกหุ้นจาก Portfolio ของคุณ**")
+        
+        # ให้ผู้ใช้เลือกว่าจะใช้ Portfolio ที่มีอยู่หรือสร้างใหม่
+        portfolio_option = st.radio(
+            "เลือกวิธีการจัดการ Portfolio:",
+            ["📋 ใช้ Portfolio ที่มีอยู่", "➕ สร้าง/แก้ไข Portfolio"],
+            key="portfolio_mode"
+        )
+        
+        # สร้าง PortfolioManager instance เพื่อดึงข้อมูล
+        portfolio_mgr = PortfolioManager()
+        existing_portfolio_symbols = portfolio_mgr.get_symbols()
+        
+        if portfolio_option == "📋 ใช้ Portfolio ที่มีอยู่":
+            # ดึงข้อมูลจาก PortfolioManager
+            if not existing_portfolio_symbols:
+                st.warning("⚠️ คุณยังไม่มี Portfolio กรุณาไปที่แท็บ '📊 Portfolio' เพื่อเพิ่มหุ้นก่อน")
+                st.info("💡 หรือเลือก '➕ สร้าง/แก้ไข Portfolio' ด้านล่างเพื่อเพิ่มหุ้นที่นี่")
+                selected_stocks = []
+            
+            else:
+                # แสดง Portfolio ปัจจุบัน
+                st.success(f"✅ คุณมีหุ้นใน Portfolio: {len(existing_portfolio_symbols)} ตัว")
+                
+                # แสดงรายการหุ้นใน Portfolio
+                col1, col2 = st.columns([3, 1])
+                with col1:
+                    st.write("**หุ้นใน Portfolio ของคุณ:**")
+                    portfolio_display = ", ".join(existing_portfolio_symbols)
+                    st.info(f"📊 {portfolio_display}")
+                
+                with col2:
+                    if st.button("🔄 รีเฟรช", use_container_width=True, key="refresh_portfolio_btn"):
+                        st.rerun()
+                
+                # ให้เลือกว่าจะวิเคราะห์หุ้นทั้งหมดหรือบางตัว
+                analysis_option = st.radio(
+                    "เลือกหุ้นที่ต้องการวิเคราะห์:",
+                    ["📊 วิเคราะห์ทั้งหมด", "🎯 เลือกบางตัว"],
+                    key="portfolio_analysis_option"
+                )
+                
+                if analysis_option == "📊 วิเคราะห์ทั้งหมด":
+                    selected_stocks = existing_portfolio_symbols
+                    st.info(f"✅ เลือกวิเคราะห์หุ้นทั้งหมด {len(selected_stocks)} ตัว")
+                else:
+                    # ให้เลือกบางตัว
+                    selected_stocks = st.multiselect(
+                        "เลือกหุ้นที่ต้องการวิเคราะห์",
+                        existing_portfolio_symbols,
+                        default=existing_portfolio_symbols[:3] if len(existing_portfolio_symbols) >= 3 else existing_portfolio_symbols,
+                        key="portfolio_select"
+                    )
+                    if selected_stocks:
+                        st.info(f"✅ เลือกวิเคราะห์ {len(selected_stocks)} ตัว: {', '.join(selected_stocks)}")
+        
+        else:  # สร้าง/แก้ไข Portfolio
+            st.write("**➕ สร้างหรือแก้ไข Portfolio:**")
+            
+            # แสดง Portfolio ปัจจุบัน (ถ้ามี)
+            if 'user_portfolio' in st.session_state and st.session_state.user_portfolio:
+                st.info(f"📋 Portfolio ปัจจุบัน ({len(st.session_state.user_portfolio)} ตัว): {', '.join(st.session_state.user_portfolio)}")
+            else:
+                st.session_state.user_portfolio = []
+            
+            # วิธีเพิ่มหุ้น
+            add_method = st.radio(
+                "เลือกวิธีเพิ่มหุ้น:",
+                ["✏️ พิมพ์ชื่อหุ้น", "📝 เลือกจากรายการยอดนิยม"],
+                key="add_method"
+            )
+            
+            if add_method == "✏️ พิมพ์ชื่อหุ้น":
+                portfolio_input = st.text_input(
+                    "พิมพ์ชื่อหุ้นที่ต้องการเพิ่ม (แยกด้วย comma)",
+                    placeholder="AAPL,MSFT,GOOGL,TSLA,NVDA",
+                    key="portfolio_input"
+                )
+                
+                if st.button("➕ เพิ่มเข้า Portfolio", use_container_width=True):
+                    if portfolio_input.strip():
+                        new_stocks = [s.strip().upper() for s in portfolio_input.split(',') if s.strip()]
+                        # เพิ่มหุ้นโดยไม่ซ้ำ
+                        for stock in new_stocks:
+                            if stock not in st.session_state.user_portfolio:
+                                st.session_state.user_portfolio.append(stock)
+                        st.success(f"✅ เพิ่มหุ้นเรียบร้อย! Portfolio ปัจจุบัน: {', '.join(st.session_state.user_portfolio)}")
+                        st.rerun()
+                    else:
+                        st.warning("⚠️ กรุณาใส่ชื่อหุ้น")
+            
+            else:  # เลือกจากรายการยอดนิยม
+                popular_stocks = [
+                    'AAPL', 'MSFT', 'GOOGL', 'AMZN', 'TSLA', 'META', 'NFLX', 'NVDA', 'AMD', 'INTC',
+                    'JPM', 'BAC', 'WFC', 'GS', 'MS', 'V', 'MA', 'DIS', 'CSCO', 'ORCL',
+                    'KO', 'PEP', 'NKE', 'MCD', 'SBUX', 'T', 'VZ', 'XOM', 'CVX', 'JNJ'
+                ]
+                
+                stocks_to_add = st.multiselect(
+                    "เลือกหุ้นจากรายการยอดนิยม",
+                    [s for s in popular_stocks if s not in st.session_state.user_portfolio],
+                    key="popular_select"
+                )
+                
+                if st.button("➕ เพิ่มเข้า Portfolio", key="add_popular_btn", use_container_width=True):
+                    if stocks_to_add:
+                        for stock in stocks_to_add:
+                            if stock not in st.session_state.user_portfolio:
+                                st.session_state.user_portfolio.append(stock)
+                        st.success(f"✅ เพิ่มหุ้นเรียบร้อย! Portfolio ปัจจุบัน: {', '.join(st.session_state.user_portfolio)}")
+                        st.rerun()
+                    else:
+                        st.warning("⚠️ กรุณาเลือกหุ้น")
+            
+            # ปุ่มจัดการ Portfolio
+            st.divider()
+            col1, col2 = st.columns(2)
+            with col1:
+                if st.button("💾 บันทึก Portfolio", use_container_width=True):
+                    if st.session_state.user_portfolio:
+                        st.success(f"✅ บันทึก Portfolio เรียบร้อย ({len(st.session_state.user_portfolio)} ตัว)")
+                    else:
+                        st.warning("⚠️ Portfolio ว่างเปล่า")
+            
+            with col2:
+                if st.button("🗑️ ลบทั้งหมด", use_container_width=True):
+                    st.session_state.user_portfolio = []
+                    st.success("✅ ลบ Portfolio ทั้งหมดเรียบร้อย")
+                    st.rerun()
+            
+            # แสดงหุ้นที่เลือก (ถ้ามี)
+            if st.session_state.user_portfolio:
+                selected_stocks = st.session_state.user_portfolio
+                st.info(f"📊 Portfolio ของคุณมี {len(selected_stocks)} ตัว")
+            else:
+                selected_stocks = []
+    
+    elif mode == "�🔍 ค้นหาจากตลาด":
         scanner = StockScanner()
         
         search_type = st.selectbox(
@@ -904,7 +1042,7 @@ elif st.session_state.current_page == "วิเคราะห์หุ้น":
             # Quick filters
             col_filter1, col_filter2 = st.columns(2)
             with col_filter1:
-                show_chart = st.checkbox("� แสดงกราฟ", value=True)
+                show_chart = st.checkbox("📊 แสดงกราฟ", value=True)
             with col_filter2:
                 sort_by = st.selectbox(
                     "เรียงลำดับ",
